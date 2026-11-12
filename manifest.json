@@ -1,0 +1,32 @@
+{
+  "manifest_version": 2,
+  "name": "Meet PiP for Firefox",
+  "version": "0.4.3",
+  "description": "Replicates Google Meet's Chrome picture-in-picture: composites the presentation and participant videos into one video that Firefox's native PiP can pop out, with the PiP mute/pause buttons wired to the Meet mic and camera.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "meet-pip@local.extension",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

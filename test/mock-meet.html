@@ -1,0 +1,69 @@
+<!doctype html>
+<!-- Fake Meet call for testing content.js. Serve the repo root and open
+     /test/mock-meet.html. ?present adds a screenshare, ?focus fakes page focus.
+     window.sim() fires a chat announcement, UI noise and three reactions. -->
+<html><head><meta charset="utf-8"><title>Mock Meet</title>
+<link rel="stylesheet" href="../content.css">
+<style>
+  body { margin:0; background:#202124; font-family: system-ui; color:#fff; }
+  #stage { display:grid; grid-template-columns: 2fr 1fr; gap:8px; padding:16px; height: 70vh; }
+  .tile { position:relative; background:#3c4043; border-radius:8px; overflow:hidden; }
+  .tile video { width:100%; height:100%; object-fit:cover; }
+  .self video { transform: scaleX(-1); }
+  #bar { position:fixed; bottom:0; left:0; right:0; height:80px; display:flex; justify-content:center; align-items:center; background:#000; }
+  #cluster { display:flex; gap:8px; align-items:center; }
+  .pair { display:flex; background:#333; border-radius:24px; }
+  #bar button { width:48px; height:48px; border-radius:24px; border:0; }
+  #bar button[data-is-muted="true"] { background:#d93025; color:#fff; }
+</style></head>
+<body>
+<div id="stage">
+  <div class="tile" data-participant-id="p1" style="grid-row: span 3"><video autoplay muted playsinline></video><button aria-label="Pin Alice to your screen"></button></div>
+  <div class="tile" data-participant-id="p2"><video autoplay muted playsinline></video></div>
+  <div class="tile" data-participant-id="p3"><video autoplay muted playsinline></video></div>
+  <div class="tile self" data-participant-id="p4"><video autoplay muted playsinline></video></div>
+</div>
+<div id="live" aria-live="polite" style="position:absolute;left:-999px"></div>
+<div style="display:none"><div data-sender-name="Bob Builder"><div data-message-id="m1">Can everyone see the deck? I will drop the link in here in a second so you can follow along with the numbers</div></div></div>
+<div id="bar"><div id="cluster">
+  <div class="pair"><button aria-label="Audio settings">^</button><button data-is-muted="false" aria-label="Turn off microphone (⌘+d)">mic</button></div>
+  <div class="pair"><button aria-label="Video settings">^</button><button data-is-muted="false" aria-label="Turn off camera (⌘+e)">cam</button></div>
+  <button>a</button><button>b</button><button>c</button><button>d</button>
+  <button aria-label="Leave call">x</button>
+</div></div>
+<script>
+  const q = new URLSearchParams(location.search), present = q.has('present');
+  document.querySelectorAll('.tile').forEach((tile, i) => {
+    const c = document.createElement('canvas'); c.width = i === 0 && present ? 1600 : 640; c.height = i === 0 && present ? 900 : 360;
+    const x = c.getContext('2d'); let t = 0; const hue = i * 90;
+    (function draw() {
+      t++;
+      x.fillStyle = `hsl(${hue},60%,30%)`; x.fillRect(0,0,c.width,c.height);
+      x.fillStyle = '#fff'; x.beginPath(); x.arc(c.width/2 + Math.sin(t/20)*40, c.height/2, c.height/4, 0, 7); x.fill();
+      x.font = '48px sans-serif'; x.fillText((i === 0 && present ? 'SLIDES ' : 'cam ') + (i+1), 30, 70);
+      requestAnimationFrame(draw);
+    })();
+    const v = tile.querySelector('video'); if (i === 0 && present) v.style.objectFit = 'contain';
+    v.srcObject = c.captureStream(30);
+  });
+  document.querySelectorAll('#bar button[data-is-muted]').forEach(b => b.addEventListener('click', () => {
+    b.dataset.isMuted = b.dataset.isMuted === 'true' ? 'false' : 'true';
+  }));
+  window.sim = () => {
+    const l = document.getElementById('live');
+    for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...']) {
+      const d = document.createElement('div'); d.textContent = text; l.append(d);
+    }
+    for (const e of ['👍','🎉','💖']) { const r = document.createElement('div'); r.innerHTML = '<img alt="'+e+'">'; document.body.append(r); }
+  };
+  // Time spent in content.js's frame callback.
+  window.perfStats = { ms: 0, n: 0, since: performance.now() };
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = cb => raf(t => {
+    if (cb.name !== 'tick') return cb(t);
+    const a = performance.now(); cb(t); perfStats.ms += performance.now() - a; perfStats.n++;
+  });
+  if (q.has('focus')) document.hasFocus = () => true;
+  document.write('<script src="' + (q.get('script') || '../content.js') + '"><\/script>');
+</script>
+</body></html>
