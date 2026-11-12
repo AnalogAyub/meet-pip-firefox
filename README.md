@@ -29,18 +29,17 @@ A button in Meet's bottom bar, left of the controls, opens a preview with a
 
 ## Install
 
-Temporary: `about:debugging` → This Firefox → Load Temporary Add-on →
-`manifest.json`.
+Download `meet-pip.xpi` from the
+[latest release](https://github.com/AnalogAyub/meet-pip-firefox/releases/latest)
+and open it in Firefox or Zen. It is signed by Mozilla, so no settings need
+changing.
 
-Development:
+To run from source, load `manifest.json` from `about:debugging` → This Firefox
+→ Load Temporary Add-on, or:
 
 ```bash
 npx web-ext run --source-dir . --firefox "/Applications/Zen Browser.app/Contents/MacOS/zen"
 ```
-
-Permanent: sign it with `npx web-ext sign --channel unlisted`, or set
-`xpinstall.signatures.required` to `false` in `about:config` if your build
-allows it, then install the zipped folder as an `.xpi`.
 
 ## Settings
 
