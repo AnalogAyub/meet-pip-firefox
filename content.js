@@ -21,7 +21,7 @@
     showSelf: false,        // include your own (mirrored) camera tile
     showChat: true,
     chatLines: 4,           // most recent messages kept on screen
-    chatTtlMs: 90000,       // a message leaves the PiP after this long
+    chatTtlMs: 6000,        // how long a chat row stays upng
     showAnnouncements: true, // also show Meet's screen-reader announcements (chat toasts, joins, hands)
     showReactions: true,
     pipMuteTogglesMic: true,     // PiP window mute button -> Meet microphone
