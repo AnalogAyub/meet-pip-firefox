@@ -1,4 +1,4 @@
-# Meet PiP for Firefox
+# <img src="icon.svg" width="32" alt=""> Meet PiP for Firefox
 
 Picture-in-picture for Google Meet in Firefox and Firefox-based browsers (Zen).
 Shows the presentation, participant video, chat, reactions and your mic/camera
