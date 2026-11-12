@@ -1,6 +1,7 @@
 <!doctype html>
 <!-- Fake Meet call for testing content.js. Serve the repo root and open
-     /test/mock-meet.html. ?present adds a screenshare, ?focus fakes page focus.
+     /test/mock-meet.html. ?present adds a screenshare, ?focus fakes page focus, ?shot shows only
+     the composite.
      window.sim() fires a chat announcement, UI noise and three reactions. -->
 <html><head><meta charset="utf-8"><title>Mock Meet</title>
 <link rel="stylesheet" href="../content.css">
@@ -38,9 +39,23 @@
     const x = c.getContext('2d'); let t = 0; const hue = i * 90;
     (function draw() {
       t++;
-      x.fillStyle = `hsl(${hue},60%,30%)`; x.fillRect(0,0,c.width,c.height);
-      x.fillStyle = '#fff'; x.beginPath(); x.arc(c.width/2 + Math.sin(t/20)*40, c.height/2, c.height/4, 0, 7); x.fill();
-      x.font = '48px sans-serif'; x.fillText((i === 0 && present ? 'SLIDES ' : 'cam ') + (i+1), 30, 70);
+      if (i === 0 && present) {
+        // A slide: title, bullets and a bar chart.
+        x.fillStyle = '#f8f9fa'; x.fillRect(0, 0, c.width, c.height);
+        x.fillStyle = '#1a73e8'; x.fillRect(0, 0, c.width, 14);
+        x.fillStyle = '#202124'; x.font = '600 72px sans-serif'; x.fillText('Quarterly review', 110, 170);
+        x.fillStyle = '#5f6368'; x.font = '40px sans-serif';
+        ['Traffic up 12% over last quarter', 'Three launches shipped', 'Next: onboarding rework'].forEach((s, k) => x.fillText('•  ' + s, 120, 290 + k * 80));
+        [0.45, 0.6, 0.52, 0.8, 0.95].forEach((h, k) => { x.fillStyle = k === 4 ? '#1a73e8' : '#c6dafc'; x.fillRect(980 + k * 100, 780 - h * 420, 70, h * 420); });
+      } else {
+        // A person: backdrop, shoulders and a head that sways a little.
+        const g = x.createLinearGradient(0, 0, c.width, c.height);
+        g.addColorStop(0, `hsl(${hue + 200},35%,42%)`); g.addColorStop(1, `hsl(${hue + 240},35%,22%)`);
+        x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+        const cx = c.width / 2 + Math.sin(t / 40 + i) * 10;
+        x.fillStyle = `hsl(${hue + 20},45%,30%)`; x.beginPath(); x.ellipse(cx, c.height * 1.08, c.height * 0.52, c.height * 0.42, 0, 0, 7); x.fill();
+        x.fillStyle = `hsl(${28 + i * 4},45%,${62 + i * 5}%)`; x.beginPath(); x.arc(cx, c.height * 0.45, c.height * 0.2, 0, 7); x.fill();
+      }
       requestAnimationFrame(draw);
     })();
     const v = tile.querySelector('video'); if (i === 0 && present) v.style.objectFit = 'contain';
@@ -65,5 +80,14 @@
   });
   if (q.has('focus')) document.hasFocus = () => true;
   document.write('<script src="' + (q.get('script') || '../content.js') + '"><\/script>');
+  // ?shot: show only the composite, full window, for screenshots.
+  if (q.has('shot') && q.has('wait')) document.write('<img src="/slow" hidden>');
+  if (q.has('shot')) addEventListener('DOMContentLoaded', () => {
+    const style = document.createElement('style');
+    style.textContent = '#meet-pip-mirror{position:fixed!important;inset:0;width:100vw!important;height:100vh!important;z-index:2147483647;background:#131314}#meet-pip-panel{opacity:1!important;transform:none!important}#meet-pip-dock{display:none}';
+    document.head.append(style);
+    if (q.has('muted')) setTimeout(() => document.querySelector('#bar button[data-is-muted]').click(), 300);
+    setTimeout(sim, 2600);
+  });
 </script>
 </body></html>

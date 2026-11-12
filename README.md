@@ -4,6 +4,12 @@ Picture-in-picture for Google Meet in Firefox and Firefox-based browsers (Zen).
 Shows the presentation, participant video, chat, reactions and your mic/camera
 state in an always-on-top window, and opens when you leave the tab.
 
+| Presenting | Not presenting |
+| --- | --- |
+| <img src="screenshots/presenting.png" width="420" alt="PiP while someone presents: slide on top, chat, participant tiles and mic/camera indicators underneath"> | <img src="screenshots/grid.png" width="240" alt="PiP without a presentation: participant grid, chat and mic/camera indicators"> |
+
+Screenshots are from the test page, not a real call.
+
 ## How it works
 
 Firefox has no Document Picture-in-Picture API. The extension draws Meet's
@@ -64,3 +70,8 @@ Extension options are in the `CONFIG` object at the top of `content.js`.
 
 `test/mock-meet.html` fakes a call. Serve the repo root and open it; add
 `?present` for a screenshare.
+
+## License
+
+Public domain ([Unlicense](LICENSE)). Copy, modify, remix, sell or
+redistribute it however you like. No attribution needed.
