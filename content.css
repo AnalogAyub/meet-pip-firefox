@@ -1,9 +1,17 @@
-/* The mirror <video> must stay in the DOM at >= 140x140 CSS px during a call
-   to remain eligible for Firefox's PiP, so the closed preview is transparent
-   rather than display:none. */
-
 #meet-pip-root.meet-pip-hidden {
   display: none;
+}
+
+/* Firefox only offers PiP for a video laid out at 140x140 CSS px or more, so
+   the mirror is transparent rather than display:none. */
+#meet-pip-mirror {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 198px;
+  height: 352px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 #meet-pip-dock {
@@ -30,59 +38,4 @@
   background: #a8c7fa;
   color: #062e6f;
   border-radius: 16px;
-}
-
-#meet-pip-panel {
-  position: fixed;
-  z-index: 2147483000;
-  width: 198px;
-  background: #1e1f20;
-  border-radius: 16px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  font: 12px/1.3 "Google Sans", Roboto, system-ui, sans-serif;
-  color: #e3e3e3;
-  transition: opacity 140ms ease, transform 140ms ease;
-}
-
-#meet-pip-panel.meet-pip-closed {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(8px);
-}
-
-#meet-pip-panel video {
-  display: block;
-  width: 198px;
-  height: 352px;
-  background: #000;
-  object-fit: contain;
-}
-
-#meet-pip-panel .meet-pip-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-}
-
-#meet-pip-panel .meet-pip-status {
-  flex: 1;
-  font-size: 11px;
-  opacity: 0.75;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-#meet-pip-panel button {
-  appearance: none;
-  border: 0;
-  border-radius: 999px;
-  padding: 4px 10px;
-  background: #a8c7fa;
-  color: #062e6f;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
 }

@@ -26,8 +26,8 @@ Firefox's built-in PiP show that video.
 - The PiP window's mute button toggles Meet's microphone.
 - The PiP window's pause button turns Meet's camera off.
 
-A button in Meet's bottom bar, left of the controls, opens a preview with a
-**Pop out** button.
+A button in Meet's bottom bar, left of the controls, opens and closes the PiP
+window.
 
 ## Install
 
@@ -51,7 +51,7 @@ In `about:config`:
 | --- | --- | --- |
 | `media.videocontrols.picture-in-picture.enable-when-switching-tabs.enabled` | `true` | Open PiP when you leave the Meet tab, close it when you return |
 | `media.videocontrols.picture-in-picture.enable-when-occluded.enabled` | `true` | Also open when another window covers the browser (optional) |
-| `dom.media-pip.enabled` | `true` | Needed for the **Pop out** button; otherwise use ⌘⇧] |
+| `dom.media-pip.enabled` | `true` | Needed for the toolbar button; otherwise use ⌘⇧] |
 
 Extension options are in the `CONFIG` object at the top of `content.js`.
 

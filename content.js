@@ -7,7 +7,7 @@
   if (window.__meetPipLoaded) return;
   window.__meetPipLoaded = true;
   // Remove nodes left by a previous instance (extension update or reload).
-  document.querySelectorAll('#meet-pip-root, #meet-pip-panel').forEach(n => n.remove());
+  document.querySelectorAll('#meet-pip-root').forEach(n => n.remove());
 
   // Config
   const CONFIG = {
@@ -482,29 +482,22 @@
     drawStatus(W - u(12), H - STATUS_H / 2, u(120), u(76));
   }
 
-  // Docked button + preview
+  // Docked button
   // Meet's toolbar re-renders and drops foreign nodes, so the button is
-  // fixed-position over the bottom bar and the preview opens above it.
+  // fixed-position over the bottom bar. The mirror video stays in the page,
+  // transparent, because Firefox only offers PiP for a laid-out video.
   const root = document.createElement('div');
   root.id = 'meet-pip-root';
   root.innerHTML = `
-    <div id="meet-pip-panel">
-      <video id="meet-pip-mirror" autoplay playsinline></video>
-      <div class="meet-pip-bar">
-        <button type="button" data-act="pop" title="Pop out as Picture-in-Picture">Pop out</button>
-        <span class="meet-pip-status"></span>
-      </div>
-    </div>
-    <button type="button" id="meet-pip-dock" data-act="toggle" title="Meet PiP preview" aria-label="Meet PiP preview">
+    <video id="meet-pip-mirror" autoplay playsinline></video>
+    <button type="button" id="meet-pip-dock" title="Picture-in-Picture" aria-label="Picture-in-Picture">
       <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
         <path fill="currentColor" d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/>
       </svg>
     </button>
   `;
-  const panel = root.querySelector('#meet-pip-panel');
   const dock = root.querySelector('#meet-pip-dock');
   const mirror = root.querySelector('video');
-  const statusEl = root.querySelector('.meet-pip-status');
 
   const stream = canvas.captureStream(CONFIG.fps);
   let audioCtx = null;
@@ -567,36 +560,21 @@
     mirror.play().catch(() => {}).finally(() => { resuming = false; });
   });
 
-  // Panel UI
-  const STORAGE_KEY = 'meet-pip-open';
-  let panelOpen = false;
-  try { panelOpen = localStorage.getItem(STORAGE_KEY) === '1'; } catch (e) { /* ignore */ }
-  function setPanelOpen(open) {
-    panelOpen = open;
-    // Hidden with opacity, not display:none: the mirror must stay >= 140px to
-    // remain eligible for automatic PiP.
-    panel.classList.toggle('meet-pip-closed', !open);
-    dock.classList.toggle('meet-pip-on', open);
-    try { localStorage.setItem(STORAGE_KEY, open ? '1' : '0'); } catch (e) { /* ignore */ }
-  }
-
-  async function popOut() {
-    if (typeof mirror.requestPictureInPicture === 'function') {
-      try {
-        await mirror.requestPictureInPicture();
-        return;
-      } catch (e) {
-        console.warn('[meet-pip] requestPictureInPicture failed', e);
-      }
+  // Opens the PiP window, or closes it if this button opened it.
+  async function togglePip() {
+    if (document.pictureInPictureElement === mirror) {
+      document.exitPictureInPicture().catch(() => {});
+      return;
     }
-    statusEl.textContent = 'Press ⌘⇧] to pop out';
+    try {
+      await mirror.requestPictureInPicture();
+    } catch (e) {
+      // dom.media-pip.enabled is off.
+      dock.title = 'Press ⌘⇧] (Ctrl+Shift+]) for Picture-in-Picture';
+      console.warn('[meet-pip] requestPictureInPicture unavailable; use the keyboard shortcut', e);
+    }
   }
-
-  root.addEventListener('click', e => {
-    const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'pop') popOut();
-    if (act === 'toggle') setPanelOpen(!panelOpen);
-  });
+  dock.addEventListener('click', togglePip);
 
   // Left of the whole control cluster; the mic button has a chevron beside it.
   function positionDock() {
@@ -616,21 +594,20 @@
     dock.style.width = dock.style.height = size + 'px';
     dock.style.left = left + 'px';
     dock.style.top = Math.round(r.top + (r.height - size) / 2) + 'px';
-    panel.style.left = Math.max(8, Math.min(left, window.innerWidth - panel.offsetWidth - 8)) + 'px';
-    panel.style.bottom = Math.round(window.innerHeight - r.top + 14) + 'px';
   }
   window.addEventListener('resize', positionDock);
 
   // Main loops
-  // Full rate only while the composite can be seen: preview open, PiP opened
-  // via the API, or the Meet page not focused. Firefox does not tell pages
+  // Full rate only while the composite can be seen: PiP opened by the
+  // button, or the Meet page not focused. Firefox does not tell pages
   // about PiP opened by its own toggle or shortcut.
   let pipActive = false;
-  mirror.addEventListener('enterpictureinpicture', () => { pipActive = true; });
-  mirror.addEventListener('leavepictureinpicture', () => { pipActive = false; });
+  function setPipActive(on) { pipActive = on; dock.classList.toggle('meet-pip-on', on); }
+  mirror.addEventListener('enterpictureinpicture', () => setPipActive(true));
+  mirror.addEventListener('leavepictureinpicture', () => setPipActive(false));
   function targetFps() {
     if (!state.inCall) return 1;
-    return panelOpen || pipActive || !document.hasFocus() ? CONFIG.fps : CONFIG.idleFps;
+    return pipActive || !document.hasFocus() ? CONFIG.fps : CONFIG.idleFps;
   }
   let lastDraw = 0;
   function tick(now) {
@@ -659,7 +636,6 @@
 
     state.micOff = MEET.isOff(MEET.micButton());
     state.camOff = MEET.isOff(MEET.camButton());
-    statusEl.textContent = `${state.micOff ? 'Mic off' : 'Mic on'} · ${state.camOff ? 'Cam off' : 'Cam on'}`;
     scanChat();
     positionDock();
 
@@ -677,7 +653,6 @@
   }
 
   root.classList.add('meet-pip-hidden');
-  setPanelOpen(panelOpen);
   document.body.prepend(root);
   sync();
   setInterval(sync, CONFIG.syncIntervalMs);

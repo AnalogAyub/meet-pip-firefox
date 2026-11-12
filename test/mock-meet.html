@@ -90,7 +90,7 @@
   if (q.has('shot') && q.has('wait')) document.write('<img src="/slow" hidden>');
   if (q.has('shot')) addEventListener('DOMContentLoaded', () => {
     const style = document.createElement('style');
-    style.textContent = '#meet-pip-mirror{position:fixed!important;inset:0;width:100vw!important;height:100vh!important;z-index:2147483647;background:#131314}#meet-pip-panel{opacity:1!important;transform:none!important}#meet-pip-dock{display:none}';
+    style.textContent = '#meet-pip-mirror{position:fixed!important;inset:0;width:100vw!important;height:100vh!important;z-index:2147483647;background:#131314;opacity:1!important}#meet-pip-dock{display:none}';
     document.head.append(style);
     if (q.has('muted')) setTimeout(() => document.querySelector('#bar button[data-is-muted]').click(), 300);
     setTimeout(sim, 2600);
