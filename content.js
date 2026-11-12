@@ -155,12 +155,32 @@
     reactions.push({ emoji, t: now, x: 0.12 + Math.random() * 0.76 });
   }
 
+  // Meet reports a reaction twice: an aria-live announcement and an inserted
+  // emoji node. Whichever arrives second within 1.5s cancels against the first.
+  const unmatched = { live: [], dom: [] };
+  function react(emoji, src) {
+    const now = performance.now();
+    const other = unmatched[src === 'live' ? 'dom' : 'live'];
+    while (other.length && now - other[0].t > 1500) other.shift();
+    const i = other.findIndex(e => e.emoji === emoji);
+    if (i >= 0) { other.splice(i, 1); return; }
+    const mine = unmatched[src];
+    if (mine.length > 20) mine.shift();
+    mine.push({ emoji, t: now });
+    pushReaction(emoji);
+  }
+
+  const seenEmojiNodes = new WeakSet();
   function emojiOf(node) {
     if (node.nodeType !== 1) return '';
     if (node.closest('button, [role="dialog"], [role="menu"], [role="listbox"], [role="textbox"], [contenteditable], [data-message-id], #meet-pip-root')) return '';
     const img = node.matches('img[alt]') ? node : node.querySelector('img[alt]');
     const cand = (img ? img.getAttribute('alt') : (node.textContent || '')).trim();
-    return cand && cand.length <= 12 && EMOJI_RE.test(cand) ? cand : '';
+    if (!cand || cand.length > 12 || !EMOJI_RE.test(cand)) return '';
+    // A wrapper and its child can both show up as added nodes.
+    for (let a = img || node; a; a = a.parentElement) { if (seenEmojiNodes.has(a)) return ''; }
+    seenEmojiNodes.add(img || node);
+    return cand;
   }
 
   // Chat toasts, joins and raised hands arrive in aria-live regions;
@@ -180,7 +200,7 @@
         if (text.length < 3 || text.length > 240) continue;
         if (CONFIG.showReactions) {
           const m = text.match(/\p{Extended_Pictographic}/u);
-          if (m && text.length < 60) pushReaction(m[0]);
+          if (m && text.length < 60) react(m[0], 'live');
         }
         if (CONFIG.showChat && CONFIG.showAnnouncements && !ANNOUNCE_NOISE.test(text)) {
           // Dedupe repeats within 10s.
@@ -191,7 +211,7 @@
       if (!CONFIG.showReactions) continue;
       for (const node of rec.addedNodes) {
         const emoji = emojiOf(node);
-        if (emoji) pushReaction(emoji);
+        if (emoji) react(emoji, 'dom');
       }
     }
   });

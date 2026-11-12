@@ -73,7 +73,8 @@
     for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...', '35 results.', 'You reacted with 👍.']) {
       const d = document.createElement('div'); d.textContent = text; l.append(d);
     }
-    for (const e of ['👍','🎉','💖']) { const r = document.createElement('div'); r.innerHTML = '<img alt="'+e+'">'; document.body.append(r); }
+    // As Meet does: a wrapper, then its emoji child, plus the announcement above.
+    for (const e of ['👍','🎉','💖']) { const r = document.createElement('div'); document.body.append(r); r.innerHTML = '<span><img alt="'+e+'"></span>'; }
   };
   // Time spent in content.js's frame callback.
   window.perfStats = { ms: 0, n: 0, since: performance.now() };
