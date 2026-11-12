@@ -125,7 +125,7 @@
   const reactions = [];       // { emoji, t, x }
   const EMOJI_RE = /^(\p{Extended_Pictographic}|\p{Regional_Indicator})/u;
   // Announcements about Meet's own UI, not from people.
-  const ANNOUNCE_NOISE = /microphone|camera|\bpin|unpin|\bmute|captions|recording|press |shortcut|keyboard|loading|presentation|presenting|main screen|\bscreen\b|\btile|layout|spotlight|connect|network|quality|picture-in-picture|^\d+ results?\b|no results|^you reacted/i;
+  const ANNOUNCE_NOISE = /microphone|camera|\bpin|unpin|\bmute|captions|recording|press |shortcut|keyboard|loading|presentation|presenting|main screen|\bscreen\b|\btile|layout|spotlight|connect|network|quality|picture-in-picture|^\d+ results?\b|no results|^you reacted|panel (is )?(now )?(open|closed)|side panel/i;
 
   function pushChat(key, sender, text) {
     if (seenChat.has(key)) return;
