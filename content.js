@@ -11,8 +11,8 @@
 
   // Config
   const CONFIG = {
-    width: 720,             // portrait composite (9:16) when nobody is presenting
-    height: 1280,
+    width: 720,             // composite width when nobody is presenting; height follows the grid
+    height: 540,            // composite height outside a call
     presentWidth: 1280,     // composite width while presenting; height follows the slide's aspect ratio
     fps: 24,                // while someone can see the composite
     idleFps: 3,             // while you are looking at Meet itself and the preview is closed
@@ -155,13 +155,18 @@
     reactions.push({ emoji, t: now, x: 0.12 + Math.random() * 0.76 });
   }
 
-  // Meet reports a reaction twice: an aria-live announcement and an inserted
-  // emoji node. Whichever arrives second within 1.5s cancels against the first.
+  // Meet reports one reaction several ways: aria-live announcements and
+  // inserted emoji nodes, each possibly more than once. Repeats from one
+  // source within 300ms are the same reaction, and a report from the other
+  // source within 4s cancels against the first.
   const unmatched = { live: [], dom: [] };
+  const lastReport = { live: {}, dom: {} };
   function react(emoji, src) {
     const now = performance.now();
+    if (now - (lastReport[src][emoji] || -1e9) < 300) return;
+    lastReport[src][emoji] = now;
     const other = unmatched[src === 'live' ? 'dom' : 'live'];
-    while (other.length && now - other[0].t > 1500) other.shift();
+    while (other.length && now - other[0].t > 4000) other.shift();
     const i = other.findIndex(e => e.emoji === emoji);
     if (i >= 0) { other.splice(i, 1); return; }
     const mine = unmatched[src];
@@ -379,10 +384,11 @@
     ctx.textAlign = 'left';
   }
 
+  const gridCols = n => n <= 1 ? 1 : n <= 4 ? 2 : 3;
   // Grid of equal centre-cropped cells. `more` > 0 adds a "+N more" cell.
   function drawGrid(entries, top, areaH, more) {
     const n = entries.length + (more ? 1 : 0);
-    const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
+    const cols = gridCols(n);
     const gap = u(8);
     const rows = Math.ceil(n / cols);
     const cw = (W - gap * (cols + 1)) / cols;
@@ -453,17 +459,23 @@
       return;
     }
 
-    setSize(CONFIG.width, CONFIG.height, CONFIG.width / 720);
+    // Height follows the grid: 4:5 tiles, as many rows as needed.
+    const w = CONFIG.width;
+    setSize(w, H, w / 720);
+    const chatLayout = layoutChat();
+    const over = videos.length > CONFIG.maxGridTiles;
+    const shown = over ? videos.slice(0, CONFIG.maxGridTiles - 1) : videos;
+    const n = shown.length + (over ? 1 : 0);
+    const cols = gridCols(n), rows = Math.ceil(n / cols), gap = u(8);
+    const cellH = (w - gap * (cols + 1)) / cols * 1.25;
+    const areaH = n ? gap + rows * cellH + (rows - 1) * gap : u(400);   // space for video
+    setSize(w, areaH + chatLayout.height + STATUS_H, w / 720);
     ctx.fillStyle = '#131314';
     ctx.fillRect(0, 0, W, H);
-    const chatLayout = layoutChat();
-    const areaH = H - STATUS_H - chatLayout.height;   // space for video
-    if (!videos.length) {
+    if (!n) {
       drawMessage('No video right now', areaH);
     } else {
-      const over = videos.length > CONFIG.maxGridTiles;
-      const shown = over ? videos.slice(0, CONFIG.maxGridTiles - 1) : videos;
-      drawGrid(shown, u(8), areaH - u(8), over ? Math.max(videos.length, othersCount) - shown.length : 0);
+      drawGrid(shown, gap, areaH - gap, over ? Math.max(videos.length, othersCount) - shown.length : 0);
     }
     if (CONFIG.showReactions && reactions.length) drawReactions(areaH);
     if (chatLayout.height) drawChat(chatLayout, areaH);

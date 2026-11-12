@@ -35,6 +35,7 @@
 <script>
   const q = new URLSearchParams(location.search), present = q.has('present');
   // ?n=9: that many other participants instead of 3.
+  if (q.has('n')) document.querySelectorAll('.tile:not(.self)').forEach((t, k) => { if (k >= +q.get('n')) t.remove(); });
   for (let k = 4; k <= +q.get('n'); k++) {
     document.querySelector('.tile.self').insertAdjacentHTML('beforebegin', `<div class="tile" data-participant-id="x${k}"><video autoplay muted playsinline></video></div>`);
   }

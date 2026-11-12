@@ -19,7 +19,8 @@ Firefox's built-in PiP show that video.
 - Presenting: the shared screen at full width, with participant tiles and
   mic/camera indicators in a row under it. 1280 px wide; height follows the
   slide's aspect ratio.
-- Not presenting: a 720x1280 grid of equal, centre-cropped tiles. Past 6
+- Not presenting: a grid of equal, centre-cropped 4:5 tiles, 720 px wide. The
+  window's shape follows the number of tiles. Past 6
   participants the last tile reads "+N more".
 - Recent chat messages and reactions are drawn in both layouts.
 - The PiP window's mute button toggles Meet's microphone.
