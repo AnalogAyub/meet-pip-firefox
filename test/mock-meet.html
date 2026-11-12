@@ -75,6 +75,14 @@
       const d = document.createElement('div'); d.textContent = text; l.append(d);
     }
     // As Meet does: a wrapper, then its emoji child, plus the announcement above.
+    // A chat announcement as Meet sends it: sender, time and text as separate
+    // nodes, with the same message in the chat panel.
+    setTimeout(() => {
+      for (const text of ['Victoria Winters', '10:57 AM', 'All should just be called that going forward']) {
+        const d = document.createElement('div'); d.textContent = text; l.append(d);
+      }
+      document.querySelector('[data-sender-name]').insertAdjacentHTML('afterend', '<div data-sender-name="Victoria Winters"><div data-message-id="m2">All should just be called that going forward</div></div>');
+    }, 400);
     for (const e of ['👍','🎉','💖']) { const r = document.createElement('div'); document.body.append(r); r.innerHTML = '<span><img alt="'+e+'"></span>'; }
   };
   // Time spent in content.js's frame callback.

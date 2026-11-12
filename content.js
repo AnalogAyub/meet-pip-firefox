@@ -131,7 +131,15 @@
     if (seenChat.has(key)) return;
     seenChat.add(key);
     if (seenChat.size > 500) seenChat.clear();
-    chat.push({ sender, text: text.replace(/\s+/g, ' ').slice(0, 240), t: Date.now() });
+    text = text.replace(/\s+/g, ' ').slice(0, 240);
+    // The chat panel and the announcement both carry a new message.
+    const now = Date.now();
+    const same = chat.find(m => m.text === text && now - m.t < 15000);
+    if (same) {
+      if (sender && !same.sender) { same.sender = sender; chatVersion++; }
+      return;
+    }
+    chat.push({ sender, text, t: now });
     chatVersion++;
     if (chat.length > 30) chat.shift();
   }
@@ -188,6 +196,32 @@
     return cand;
   }
 
+  // An announced chat message arrives as separate nodes: sender, time, text.
+  // Collect a region's pieces for a moment and show them as one row.
+  const TIME_RE = /^\d{1,2}[:.]\d{2}(\s?[ap]\.?m\.?)?$/i;
+  const liveParts = new Map();
+  function queueLive(region, text) {
+    let parts = liveParts.get(region);
+    if (!parts) {
+      liveParts.set(region, parts = []);
+      setTimeout(() => {
+        liveParts.delete(region);
+        const sender = parts.length > 1 && parts[0].length <= 40 ? parts.shift() : '';
+        const body = parts.join(' ');
+        pushChat('a:' + sender + body + ':' + Math.floor(Date.now() / 10000), sender, body);
+      }, 250);
+    }
+    if (!TIME_RE.test(text) && parts[parts.length - 1] !== text) parts.push(text);
+  }
+  function textPieces(node) {
+    if (node.nodeType === 3) return [node.data.trim()];
+    if (node.nodeType !== 1) return [];
+    const out = [];
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) out.push(walker.currentNode.data.trim());
+    return out;
+  }
+
   // Chat toasts, joins and raised hands arrive in aria-live regions;
   // reactions arrive as inserted emoji nodes.
   const observer = new MutationObserver(records => {
@@ -208,8 +242,8 @@
           if (m && text.length < 60) react(m[0], 'live');
         }
         if (CONFIG.showChat && CONFIG.showAnnouncements && !ANNOUNCE_NOISE.test(text)) {
-          // Dedupe repeats within 10s.
-          pushChat('a:' + text + ':' + Math.floor(Date.now() / 10000), '', text);
+          const pieces = rec.type === 'characterData' ? [text] : [...rec.addedNodes].flatMap(textPieces);
+          for (const piece of pieces) if (piece) queueLive(live, piece);
         }
         continue;
       }
