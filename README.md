@@ -19,7 +19,8 @@ Firefox's built-in PiP show that video.
 - Presenting: the shared screen at full width, with participant tiles and
   mic/camera indicators in a row under it. 1280 px wide; height follows the
   slide's aspect ratio.
-- Not presenting: a 720x1280 grid of up to 6 participants, centre-cropped.
+- Not presenting: a 720x1280 grid of equal, centre-cropped tiles. Past 6
+  participants the last tile reads "+N more".
 - Recent chat messages and reactions are drawn in both layouts.
 - The PiP window's mute button toggles Meet's microphone.
 - The PiP window's pause button turns Meet's camera off.
@@ -68,7 +69,7 @@ Extension options are in the `CONFIG` object at the top of `content.js`.
 ## Testing
 
 `test/mock-meet.html` fakes a call. Serve the repo root and open it; add
-`?present` for a screenshare.
+`?present` for a screenshare, `?n=9` for more participants.
 
 ## License
 

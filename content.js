@@ -77,8 +77,11 @@
       const cs = getComputedStyle(video);
       // Only your own preview is mirrored.
       if (cs.transform && cs.transform !== 'none' && new DOMMatrix(cs.transform).a < 0) self = true;
-      // Cameras use cover; a shared screen uses contain.
-      if (cs.objectFit === 'contain') presentation = true;
+      // A shared screen uses contain, but so does a camera set to "fit to
+      // frame", so also require a size or shape a camera doesn't send.
+      const ar = video.videoWidth / video.videoHeight;
+      const cameraShaped = [16 / 9, 4 / 3, 9 / 16, 3 / 4, 1].some(a => Math.abs(ar - a) < 0.03);
+      if (cs.objectFit === 'contain' && (!cameraShaped || video.videoHeight > 720)) presentation = true;
     } catch (e) { /* ignore */ }
     const tile = video.closest('[data-participant-id]');
     if (!presentation && tile && /presentation|presenting|präsentation|présentation|presentación/i.test(tile.textContent || '')) {
@@ -92,6 +95,7 @@
   // Tiles to draw, largest first. Needs layout, so sync() rebuilds it twice a
   // second instead of every frame.
   let sources = [];
+  let othersCount = 0;   // participant tiles other than yours, with or without video
   function refreshSources() {
     const out = [];
     for (const v of document.querySelectorAll('video')) {
@@ -108,6 +112,7 @@
     }
     out.sort((a, b) => b.area - a.area);
     sources = out;
+    othersCount = Math.max(0, MEET.tiles().length - 1);
   }
   // Per frame: cheap liveness checks only.
   function sourceVideos() {
@@ -120,7 +125,7 @@
   const reactions = [];       // { emoji, t, x }
   const EMOJI_RE = /^(\p{Extended_Pictographic}|\p{Regional_Indicator})/u;
   // Announcements about Meet's own UI, not from people.
-  const ANNOUNCE_NOISE = /microphone|camera|\bpin|unpin|\bmute|captions|recording|press |shortcut|keyboard|loading|presentation|presenting|main screen|\bscreen\b|\btile|layout|spotlight|connect|network|quality|picture-in-picture/i;
+  const ANNOUNCE_NOISE = /microphone|camera|\bpin|unpin|\bmute|captions|recording|press |shortcut|keyboard|loading|presentation|presenting|main screen|\bscreen\b|\btile|layout|spotlight|connect|network|quality|picture-in-picture|^\d+ results?\b|no results|^you reacted/i;
 
   function pushChat(key, sender, text) {
     if (seenChat.has(key)) return;
@@ -169,6 +174,8 @@
       if (!host || root.contains(host)) continue;
       const live = host.closest('[aria-live]');
       if (live) {
+        // Search counts and the like from pickers and menus.
+        if (live.closest('[role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="search"], form')) continue;
         const text = (rec.type === 'characterData' ? rec.target.data : [...rec.addedNodes].map(n => n.textContent).join(' ')).trim();
         if (text.length < 3 || text.length > 240) continue;
         if (CONFIG.showReactions) {
@@ -244,7 +251,7 @@
 
   let CHAT_FONT, CHAT_LH, CHAT_PAD, STATUS_H;
   function applyUnit() {
-    CHAT_FONT = u(27); CHAT_LH = u(36); CHAT_PAD = u(14); STATUS_H = u(118);
+    CHAT_FONT = u(27); CHAT_LH = u(36); CHAT_PAD = u(14); STATUS_H = u(96);
   }
   applyUnit();
   // Recompute only when the chat, width or second (for expiry) changes.
@@ -336,20 +343,11 @@
     ctx.fill(path);
     ctx.restore();
   }
-  // Side by side across (x, y, w, h), or stacked when `stacked`.
-  function drawStatus(x, y, w, h, stacked) {
-    const gap = u(8);
-    const mic = [!state.micOff, state.micOff ? 'micOff' : 'micOn'];
-    const cam = [!state.camOff, state.camOff ? 'camOff' : 'camOn'];
-    if (stacked) {
-      const bh = (h - gap) / 2;
-      statusBlock(x, y, w, bh, ...mic);
-      statusBlock(x, y + bh + gap, w, bh, ...cam);
-    } else {
-      const bw = (w - gap) / 2;
-      statusBlock(x, y, bw, h, ...mic);
-      statusBlock(x + bw + gap, y, bw, h, ...cam);
-    }
+  // Two blocks of (bw, bh), right edge at `right`, vertically centred on `cy`.
+  function drawStatus(right, cy, bw, bh) {
+    const gap = u(10);
+    statusBlock(right - bw * 2 - gap, cy - bh / 2, bw, bh, !state.micOff, state.micOff ? 'micOff' : 'micOn');
+    statusBlock(right - bw, cy - bh / 2, bw, bh, !state.camOff, state.camOff ? 'camOff' : 'camOn');
   }
 
   function drawMessage(message, areaH) {
@@ -361,20 +359,33 @@
     ctx.textAlign = 'left';
   }
 
-  // Grid of centre-cropped cells inside (left, top, width, areaH).
-  function drawGrid(entries, top, areaH, cols) {
+  // Grid of equal centre-cropped cells. `more` > 0 adds a "+N more" cell.
+  function drawGrid(entries, top, areaH, more) {
+    const n = entries.length + (more ? 1 : 0);
+    const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
     const gap = u(8);
-    const rows = Math.ceil(entries.length / cols);
+    const rows = Math.ceil(n / cols);
     const cw = (W - gap * (cols + 1)) / cols;
     const ch = Math.min((areaH - gap * (rows - 1)) / rows, cw * 16 / 9);
     const blockH = rows * ch + (rows - 1) * gap;
     const y0 = top + (areaH - blockH) / 2;
-    entries.forEach((entry, i) => {
+    for (let i = 0; i < n; i++) {
       const c = i % cols, r = Math.floor(i / cols);
-      const inRow = r === rows - 1 ? entries.length - r * cols : cols;
+      const inRow = r === rows - 1 ? n - r * cols : cols;
       const rowW = inRow * cw + (inRow - 1) * gap;
-      drawCover(entry.video, (W - rowW) / 2 + c * (cw + gap), y0 + r * (ch + gap), cw, ch);
-    });
+      const x = (W - rowW) / 2 + c * (cw + gap), y = y0 + r * (ch + gap);
+      if (i < entries.length) { drawCover(entries[i].video, x, y, cw, ch); continue; }
+      ctx.fillStyle = '#2b2c2f';
+      ctx.beginPath();
+      ctx.roundRect(x, y, cw, ch, u(18));
+      ctx.fill();
+      ctx.fillStyle = '#e8eaed';
+      ctx.font = `500 ${u(44)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`+${more} more`, x + cw / 2, y + ch / 2);
+      ctx.textAlign = 'left';
+    }
   }
 
   // Presenting: slide at full width and its own aspect ratio, chat under it,
@@ -386,7 +397,7 @@
     const presH = Math.round(w / aspect);
     // Chat wraps against the width, so size in two steps.
     setSize(w, W === w ? H : presH, w / 960);
-    const rowH = u(150);
+    const rowH = u(200);
     const gap = u(8);
     const chatLayout = layoutChat();
     setSize(w, presH + chatLayout.height + rowH + gap * 2, w / 960);
@@ -398,10 +409,11 @@
     if (chatLayout.height) drawChat(chatLayout, presH);
 
     const rowY = H - rowH - gap;
-    const statusW = u(300);
-    drawStatus(W - statusW - gap, rowY, statusW, rowH, false);
-    // 4:5 tiles, left-aligned.
-    const tw = Math.round(rowH * 0.8);
+    const sb = u(104);
+    drawStatus(W - gap * 2, rowY + rowH / 2, sb, sb);
+    // Square tiles, left-aligned, narrower if they would reach the indicators.
+    const avail = W - gap * 5 - sb * 2 - u(10);
+    const tw = Math.min(rowH, Math.floor(avail / Math.max(1, rest.length)) - gap);
     rest.forEach((entry, i) => drawCover(entry.video, gap + i * (tw + gap), rowY, tw, rowH));
   }
 
@@ -429,13 +441,13 @@
     if (!videos.length) {
       drawMessage('No video right now', areaH);
     } else {
-      const shown = videos.slice(0, CONFIG.maxGridTiles);
-      const cols = shown.length <= 1 ? 1 : shown.length <= 4 ? 2 : 3;
-      drawGrid(shown, u(8), areaH - u(8), cols);
+      const over = videos.length > CONFIG.maxGridTiles;
+      const shown = over ? videos.slice(0, CONFIG.maxGridTiles - 1) : videos;
+      drawGrid(shown, u(8), areaH - u(8), over ? Math.max(videos.length, othersCount) - shown.length : 0);
     }
     if (CONFIG.showReactions && reactions.length) drawReactions(areaH);
     if (chatLayout.height) drawChat(chatLayout, areaH);
-    drawStatus(u(8), H - STATUS_H + u(8), W - u(16), STATUS_H - u(16), false);
+    drawStatus(W - u(12), H - STATUS_H / 2, u(120), u(76));
   }
 
   // Docked button + preview
