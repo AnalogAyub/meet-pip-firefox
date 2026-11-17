@@ -21,7 +21,8 @@
     showSelf: false,        // include your own (mirrored) camera tile
     showChat: true,
     chatLines: 4,           // most recent messages kept on screen
-    chatTtlMs: 6000,        // how long a chat row stays up
+    chatTtlMs: 6000,        // how long a chat row stays up; longer if it has to scroll
+    showTileMic: true,      // mic badge on each participant tile
     showAnnouncements: true, // also show Meet's screen-reader announcements (chat toasts, raised hands)
     showReactions: true,
     pipMuteTogglesMic: true,     // PiP window mute button -> Meet microphone
@@ -92,6 +93,17 @@
     return info;
   }
 
+  // Meet marks a muted participant with a mic_off icon on the tile. The
+  // "mute for everyone" button has the same icon, so skip icons in buttons.
+  function tileMuted(video) {
+    const tile = video.closest('[data-participant-id]');
+    if (!tile) return false;
+    for (const icon of tile.querySelectorAll('i')) {
+      if (icon.textContent.trim() === 'mic_off' && !icon.closest('button, [role="button"]')) return true;
+    }
+    return false;
+  }
+
   // Tiles to draw, largest first. Needs layout, so sync() rebuilds it twice a
   // second instead of every frame.
   let sources = [];
@@ -108,7 +120,7 @@
       if (r.width < 2 || r.height < 2) continue;
       const info = tileInfo(v);
       if (info.self && !CONFIG.showSelf) continue;
-      out.push({ video: v, area: r.width * r.height, presentation: info.presentation });
+      out.push({ video: v, area: r.width * r.height, presentation: info.presentation, muted: !info.presentation && tileMuted(v) });
     }
     out.sort((a, b) => b.area - a.area);
     sources = out;
@@ -291,23 +303,6 @@
 
   const state = { micOff: false, camOff: false, inCall: false };
 
-  // Wrap `text` to at most `maxLines` lines of width `maxW`.
-  function wrap(text, maxW, maxLines) {
-    const words = text.split(' ');
-    const lines = [];
-    let line = '';
-    for (const word of words) {
-      const next = line ? line + ' ' + word : word;
-      if (ctx.measureText(next).width <= maxW || !line) { line = next; continue; }
-      lines.push(line);
-      line = word;
-      if (lines.length === maxLines) break;
-    }
-    if (lines.length < maxLines && line) lines.push(line);
-    else if (lines.length === maxLines) lines[maxLines - 1] = lines[maxLines - 1].replace(/.{2}$/, '…');
-    return lines;
-  }
-
   let CHAT_FONT, CHAT_LH, CHAT_PAD, STATUS_H;
   function applyUnit() {
     CHAT_FONT = u(27); CHAT_LH = u(36); CHAT_PAD = u(14); STATUS_H = u(96);
@@ -320,45 +315,54 @@
     if (key !== chatCacheKey) { chatCacheKey = key; chatCache = computeChatLayout(); }
     return chatCache;
   }
+  // One line per message. A row wider than the window scrolls sideways, and
+  // stays up long enough to be read to the end.
   function computeChatLayout() {
     if (!CONFIG.showChat) return { rows: [], height: 0 };
-    const cutoff = Date.now() - CONFIG.chatTtlMs;
-    const recent = chat.filter(m => m.t >= cutoff).slice(-CONFIG.chatLines);
-    if (!recent.length) return { rows: [], height: 0 };
-    ctx.font = `500 ${CHAT_FONT}px ${FONT}`;
-    const rows = recent.map(m => ({
-      sender: m.sender,
-      lines: wrap((m.sender ? m.sender + ': ' : '') + m.text, W - u(24) - CHAT_PAD * 2, 2),
-    }));
-    const height = rows.reduce((h, r) => h + r.lines.length * CHAT_LH + CHAT_PAD + u(8), 0) + u(4);
-    return { rows, height };
+    const now = Date.now();
+    const avail = W - u(24) - CHAT_PAD * 2;
+    const rows = [];
+    for (const m of chat) {
+      ctx.font = `700 ${CHAT_FONT}px ${FONT}`;
+      const senderW = m.sender ? ctx.measureText(m.sender + ': ').width : 0;
+      ctx.font = `500 ${CHAT_FONT}px ${FONT}`;
+      const overflow = Math.max(0, senderW + ctx.measureText(m.text).width - avail);
+      const scrollMs = overflow / u(150) * 1000;
+      const ttl = Math.min(25000, CONFIG.chatTtlMs + scrollMs);
+      if (now - m.t < ttl) rows.push({ m, senderW, overflow, scrollMs: ttl - CONFIG.chatTtlMs });
+    }
+    rows.splice(0, Math.max(0, rows.length - CONFIG.chatLines));
+    return { rows, height: rows.length ? rows.length * (CHAT_LH + CHAT_PAD + u(8)) + u(4) : 0 };
   }
 
   function drawChat(layout, top) {
     let y = top + u(4);
+    const h = CHAT_LH + CHAT_PAD, now = Date.now();
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     for (const row of layout.rows) {
-      const h = row.lines.length * CHAT_LH + CHAT_PAD;
       ctx.fillStyle = '#2b2c2f';
       ctx.beginPath();
       ctx.roundRect(u(12), y, W - u(24), h, u(14));
       ctx.fill();
-      row.lines.forEach((line, i) => {
-        const ly = y + CHAT_PAD / 2 + CHAT_LH * (i + 0.5);
-        let x = u(12) + CHAT_PAD, rest = line;
-        if (i === 0 && row.sender && line.startsWith(row.sender + ':')) {
-          // Sender in bold, then the message.
-          ctx.font = `700 ${CHAT_FONT}px ${FONT}`;
-          ctx.fillStyle = '#8ab4f8';
-          ctx.fillText(row.sender + ':', x, ly);
-          x += ctx.measureText(row.sender + ': ').width;
-          rest = line.slice(row.sender.length + 1).trimStart();
-        }
-        ctx.font = `500 ${CHAT_FONT}px ${FONT}`;
-        ctx.fillStyle = '#e8eaed';
-        ctx.fillText(rest, x, ly);
-      });
+      // Hold for 2s, scroll to the end, hold again.
+      const progress = row.scrollMs ? Math.max(0, Math.min(1, (now - row.m.t - 2000) / row.scrollMs)) : 0;
+      let x = u(12) + CHAT_PAD - row.overflow * progress;
+      const ly = y + h / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(u(12) + CHAT_PAD, y, W - u(24) - CHAT_PAD * 2, h);
+      ctx.clip();
+      if (row.m.sender) {
+        ctx.font = `700 ${CHAT_FONT}px ${FONT}`;
+        ctx.fillStyle = '#8ab4f8';
+        ctx.fillText(row.m.sender + ':', x, ly);
+        x += row.senderW;
+      }
+      ctx.font = `500 ${CHAT_FONT}px ${FONT}`;
+      ctx.fillStyle = '#e8eaed';
+      ctx.fillText(row.m.text, x, ly);
+      ctx.restore();
       y += h + u(8);
     }
   }
@@ -402,6 +406,14 @@
     ctx.fill(path);
     ctx.restore();
   }
+  // Mic badge in a tile's top-right corner.
+  function drawTile(entry, x, y, w, h) {
+    drawCover(entry.video, x, y, w, h);
+    if (!CONFIG.showTileMic) return;
+    const d = Math.max(u(34), Math.min(u(52), w * 0.2)), m = d * 0.22;
+    statusBlock(x + w - d - m, y + m, d, d, !entry.muted, entry.muted ? 'micOff' : 'micOn');
+  }
+
   // Two blocks of (bw, bh), right edge at `right`, vertically centred on `cy`.
   function drawStatus(right, cy, bw, bh) {
     const gap = u(10);
@@ -434,7 +446,7 @@
       const inRow = r === rows - 1 ? n - r * cols : cols;
       const rowW = inRow * cw + (inRow - 1) * gap;
       const x = (W - rowW) / 2 + c * (cw + gap), y = y0 + r * (ch + gap);
-      if (i < entries.length) { drawCover(entries[i].video, x, y, cw, ch); continue; }
+      if (i < entries.length) { drawTile(entries[i], x, y, cw, ch); continue; }
       ctx.fillStyle = '#2b2c2f';
       ctx.beginPath();
       ctx.roundRect(x, y, cw, ch, u(18));
@@ -474,7 +486,7 @@
     // Square tiles, left-aligned, narrower if they would reach the indicators.
     const avail = W - gap * 5 - sb * 2 - u(10);
     const tw = Math.min(rowH, Math.floor(avail / Math.max(1, rest.length)) - gap);
-    rest.forEach((entry, i) => drawCover(entry.video, gap + i * (tw + gap), rowY, tw, rowH));
+    rest.forEach((entry, i) => drawTile(entry, gap + i * (tw + gap), rowY, tw, rowH));
   }
 
   function compose() {
@@ -637,6 +649,8 @@
   // about PiP opened by its own toggle or shortcut.
   let pipActive = false;
   function setPipActive(on) { pipActive = on; dock.classList.toggle('meet-pip-on', on); }
+  // early.js swallows these events in Firefox and reports them here instead.
+  if (window.__meetPipEarly) window.__meetPipEarly.onPip = setPipActive;
   mirror.addEventListener('enterpictureinpicture', () => setPipActive(true));
   mirror.addEventListener('leavepictureinpicture', () => setPipActive(false));
   function targetFps() {

@@ -19,8 +19,8 @@
 </style></head>
 <body>
 <div id="stage">
-  <div class="tile" data-participant-id="p1" style="grid-row: span 3"><video autoplay muted playsinline></video><button aria-label="Pin Alice to your screen"></button></div>
-  <div class="tile" data-participant-id="p2"><video autoplay muted playsinline></video></div>
+  <div class="tile" data-participant-id="p1" style="grid-row: span 3"><video autoplay muted playsinline></video><button aria-label="Pin Alice to your screen"></button><button aria-label="Mute Alice for everyone"><i hidden>mic_off</i></button></div>
+  <div class="tile" data-participant-id="p2"><video autoplay muted playsinline></video><i hidden>mic_off</i></div>
   <div class="tile" data-participant-id="p3"><video autoplay muted playsinline></video></div>
   <div class="tile self" data-participant-id="p4"><video autoplay muted playsinline></video></div>
 </div>
@@ -71,7 +71,7 @@
   }));
   window.sim = () => {
     const l = document.getElementById('live');
-    for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...', '35 results.', 'Dana Lee joined', 'Dana Lee has left the meeting', 'Dana Lee has started transcription', 'Transcription has started', 'Weekly sync panel is open', 'You reacted with 👍.']) {
+    for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...', '35 results.', 'Erin says: here is a much longer message that will not fit on a single line and so has to scroll sideways to be read', 'Dana Lee joined', 'Dana Lee has left the meeting', 'Dana Lee has started transcription', 'Transcription has started', 'Weekly sync panel is open', 'You reacted with 👍.']) {
       const d = document.createElement('div'); d.textContent = text; l.append(d);
     }
     // As Meet does: a wrapper, then its emoji child, plus the announcement above.

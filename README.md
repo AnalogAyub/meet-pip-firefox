@@ -22,7 +22,11 @@ Firefox's built-in PiP show that video.
 - Not presenting: a grid of equal, centre-cropped 4:5 tiles, 720 px wide. The
   window's shape follows the number of tiles. Past 6
   participants the last tile reads "+N more".
-- Recent chat messages and reactions are drawn in both layouts.
+- New chat messages show for 6 seconds, one line each; a long one scrolls.
+  Reactions float up over the video.
+- Each participant tile has a mic badge showing whether they are muted.
+- Meet is not told that PiP is open or that its tab is hidden, so it keeps the
+  layout you left.
 - The PiP window's mute button toggles Meet's microphone.
 - The PiP window's pause button turns Meet's camera off.
 
