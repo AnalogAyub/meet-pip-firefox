@@ -14,59 +14,43 @@
     "moz-src:///toolkit/components/pictureinpicture/PictureInPicture.sys.mjs"
   );
 
+  // This mod's folder under chrome/sine-mods, served as chrome://sine/content/.
+  const folder = (Components.stack.filename || "").match(/chrome:\/\/sine\/content\/(.+)\/[^/]+$/)?.[1] || "meet-pip";
+
   // The bridge actor's modules are loaded by URL from the tab's process, so
   // this mod's folder needs a resource:// name.
   function registerActor() {
-    const folder = (Components.stack.filename || "").match(/chrome:\/\/sine\/content\/(.+)\/[^/]+$/)?.[1] || "meet-pip";
     const dir = Services.dirsvc.get("ProfD", Ci.nsIFile);
     for (const part of ["chrome", "sine-mods", ...folder.split("/")]) dir.append(part);
     const res = Services.io.getProtocolHandler("resource").QueryInterface(Ci.nsIResProtocolHandler);
     if (!res.hasSubstitution("meet-pip-mod")) res.setSubstitution("meet-pip-mod", Services.io.newFileURI(dir));
+    // Registered afresh for each PiP window, so an updated mod takes effect
+    // without restarting the browser.
+    try { ChromeUtils.unregisterWindowActor(ACTOR); } catch (e) { /* not registered yet */ }
     try {
       ChromeUtils.registerWindowActor(ACTOR, {
         parent: { esModuleURI: "resource://meet-pip-mod/bridge-parent.js" },
         child: { esModuleURI: "resource://meet-pip-mod/bridge-child.js" },
         matches: ["https://meet.google.com/*"],
+        // Meet runs in a site-isolated process ("webIsolated=https://google.com").
+        remoteTypes: ["web", "webIsolated", "webCOOP+COEP"],
         allFrames: false,
       });
     } catch (e) {
-      // Already registered by an earlier PiP window.
-      if (e.name !== "NotSupportedError") console.error("[meet-pip] actor registration failed", e);
+      console.error("[meet-pip] actor registration failed", e);
     }
   }
 
-  const STYLE = `
-    :root[meetpip] #controls-bottom,
-    :root[meetpip] #controls-bottom-gradient { display: none !important; }
-    #meetpip-bar {
-      position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
-      display: flex; flex-direction: column; gap: 6px; padding: 18px 8px 8px;
-      background: linear-gradient(transparent, rgba(0, 0, 0, 0.78) 45%);
-      opacity: 0; transition: opacity 160ms linear;
-      -moz-window-dragging: no-drag;
-      font: 13px system-ui, sans-serif; color: #e8eaed;
-    }
-    body:hover #meetpip-bar, #meetpip-bar:focus-within { opacity: 1; }
-    #meetpip-bar .row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    #meetpip-bar .reactions { justify-content: center; }
-    #meetpip-bar button {
-      appearance: none; border: 0; flex: none; width: 30px; height: 30px; padding: 0;
-      border-radius: 50%; background: #3c4043; color: #e8eaed; cursor: pointer;
-      display: grid; place-items: center; font-size: 16px; line-height: 1;
-    }
-    #meetpip-bar button:hover { background: #5f6368; }
-    #meetpip-bar button[off] { background: #f9dedc; color: #8c1d18; }
-    #meetpip-bar button.react { background: transparent; font-size: 18px; }
-    #meetpip-bar button.react:hover { background: rgba(255, 255, 255, 0.2); }
-    #meetpip-bar button.end { background: #d93025; color: #fff; width: 40px; border-radius: 15px; }
-    #meetpip-bar button.end:hover { background: #ea4335; }
-    #meetpip-bar svg { width: 18px; height: 18px; fill: currentColor; }
-    #meetpip-bar input {
-      flex: 1; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 12px;
-      border: 0; border-radius: 15px; background: rgba(60, 64, 67, 0.95); color: #e8eaed; font: inherit;
-    }
-    #meetpip-bar input::placeholder { color: #9aa0a6; }
-  `;
+  // Second route to the tab, used if the actor is refused: a frame script.
+  const FRAME_SCRIPT = "data:application/javascript;charset=utf-8," + encodeURIComponent(`
+    addMessageListener("MeetPip:Command", m => {
+      content.document.dispatchEvent(new content.CustomEvent("meet-pip-command", { detail: JSON.stringify(m.data) }));
+    });
+    addEventListener("meet-pip-state", e => {
+      if (typeof e.detail === "string") sendAsyncMessage("MeetPip:State", e.detail.slice(0, 200));
+    }, true, true);
+  `);
+
   // Material mic, mic_off, videocam, videocam_off, call_end.
   const ICONS = {
     micOn: "M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z",
@@ -78,9 +62,25 @@
 
   function start(browser) {
     registerActor();
+    let viaFrameScript = false;
     const send = cmd => {
+      if (!viaFrameScript) {
+        try {
+          browser.browsingContext.currentWindowGlobal.getActor(ACTOR).sendAsyncMessage("MeetPip:Command", cmd);
+          return;
+        } catch (e) {
+          console.warn("[meet-pip] actor refused, using a frame script instead", e);
+          viaFrameScript = true;
+          try {
+            browser.messageManager.loadFrameScript(FRAME_SCRIPT, false);
+            browser.messageManager.addMessageListener("MeetPip:State", onFrameState);
+          } catch (err) {
+            console.error("[meet-pip] could not reach the Meet tab", err);
+          }
+        }
+      }
       try {
-        browser.browsingContext.currentWindowGlobal.getActor(ACTOR).sendAsyncMessage("MeetPip:Command", cmd);
+        browser.messageManager.sendAsyncMessage("MeetPip:Command", cmd);
       } catch (e) {
         console.error("[meet-pip] could not reach the Meet tab", e);
       }
@@ -142,19 +142,27 @@
       btn.replaceChildren(icon(name));
       btn.toggleAttribute("off", off);
     };
+    const showState = json => {
+      let state;
+      try { state = JSON.parse(json); } catch (e) { return; }
+      setIcon(mic, state.mic ? "micOn" : "micOff", !state.mic);
+      setIcon(cam, state.cam ? "camOn" : "camOff", !state.cam);
+    };
+    function onFrameState(m) { showState(m.data); }
     const observer = {
       observe(_subject, _topic, data) {
-        let msg, state;
-        try { msg = JSON.parse(data); state = JSON.parse(msg.state); } catch (e) { return; }
-        if (msg.browserId !== browser.browserId) return;
-        setIcon(mic, state.mic ? "micOn" : "micOff", !state.mic);
-        setIcon(cam, state.cam ? "camOn" : "camOff", !state.cam);
+        let msg;
+        try { msg = JSON.parse(data); } catch (e) { return; }
+        if (msg.browserId === browser.browserId) showState(msg.state);
       },
     };
     Services.obs.addObserver(observer, "meet-pip-state");
-    window.addEventListener("unload", () => Services.obs.removeObserver(observer, "meet-pip-state"), { once: true });
+    window.addEventListener("unload", () => {
+      Services.obs.removeObserver(observer, "meet-pip-state");
+      try { browser.messageManager.removeMessageListener("MeetPip:State", onFrameState); } catch (e) { /* tab gone */ }
+    }, { once: true });
 
-    document.head.append(el("style", {}, STYLE));
+    document.head.append(el("link", { rel: "stylesheet", href: `chrome://sine/content/${folder}/player.css` }));
     document.documentElement.setAttribute("meetpip", "");
     document.body.append(bar);
     send({ cmd: "hello" });

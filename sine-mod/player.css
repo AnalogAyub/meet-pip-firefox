@@ -1,0 +1,32 @@
+/* Linked into the PiP player window by meet-pip.uc.js for Meet calls only.
+   The window's content security policy only allows chrome: stylesheets. */
+:root[meetpip] #controls-bottom,
+:root[meetpip] #controls-bottom-gradient { display: none !important; }
+#meetpip-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; flex-direction: column; gap: 6px; padding: 18px 8px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.78) 45%);
+  opacity: 0; transition: opacity 160ms linear;
+  -moz-window-dragging: no-drag;
+  font: 13px system-ui, sans-serif; color: #e8eaed;
+}
+body:hover #meetpip-bar, #meetpip-bar:focus-within { opacity: 1; }
+#meetpip-bar .row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#meetpip-bar .reactions { justify-content: center; }
+#meetpip-bar button {
+  appearance: none; border: 0; flex: none; width: 30px; height: 30px; padding: 0;
+  border-radius: 50%; background: #3c4043; color: #e8eaed; cursor: pointer;
+  display: grid; place-items: center; font-size: 16px; line-height: 1;
+}
+#meetpip-bar button:hover { background: #5f6368; }
+#meetpip-bar button[off] { background: #f9dedc; color: #8c1d18; }
+#meetpip-bar button.react { background: transparent; font-size: 18px; }
+#meetpip-bar button.react:hover { background: rgba(255, 255, 255, 0.2); }
+#meetpip-bar button.end { background: #d93025; color: #fff; width: 40px; border-radius: 15px; }
+#meetpip-bar button.end:hover { background: #ea4335; }
+#meetpip-bar svg { width: 18px; height: 18px; fill: currentColor; }
+#meetpip-bar input {
+  flex: 1; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 12px;
+  border: 0; border-radius: 15px; background: rgba(60, 64, 67, 0.95); color: #e8eaed; font: inherit;
+}
+#meetpip-bar input::placeholder { color: #9aa0a6; }

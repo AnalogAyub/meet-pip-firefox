@@ -833,7 +833,7 @@
     const now = JSON.stringify({ mic: !state.micOff, cam: !state.camOff });
     if (!force && now === lastState) return;
     lastState = now;
-    document.dispatchEvent(new CustomEvent('meet-pip-state', { detail: now }));
+    document.dispatchEvent(new CustomEvent('meet-pip-state', { detail: now, bubbles: true }));
   }
 
   // Left of the whole control cluster; the mic button has a chevron beside it.
