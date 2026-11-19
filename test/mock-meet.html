@@ -39,12 +39,29 @@
 <div id="chatPanel" hidden></div>
 <template id="chatBox"><textarea aria-label="Send a message"></textarea>
   <button aria-label="Send a message" onclick="mockLog.push('sent: ' + this.previousElementSibling.value)">send</button></template>
-<script>window.mockLog = [];</script>
+<script>
+  window.mockLog = [];
+  function togglePicker() {
+    const open = document.getElementById('picker');
+    if (open) { open.remove(); return; }
+    document.body.insertAdjacentHTML('beforeend', '<div id="picker" role="dialog" aria-label="More emojis" style="position:fixed;left:0;top:0;width:200px"><div role="tabpanel" style="height:120px;overflow:auto"><div role="menu" style="height:2000px;position:relative"></div></div></div>');
+    const panel = document.querySelector('#picker [role=tabpanel]'), menu = panel.firstChild;
+    const rows = ['😀', '🤖', '🦄', '🌶️'];
+    const render = () => {
+      const row = Math.min(rows.length - 1, Math.floor(panel.scrollTop / 500));
+      menu.innerHTML = `<button role="menuitem" data-emoji="${rows[row]}" style="position:absolute;top:${panel.scrollTop}px" onclick="mockLog.push('react ${rows[row]}'); togglePicker()">${rows[row]}</button>`;
+    };
+    panel.addEventListener('scroll', render);
+    render();
+  }
+</script>
 <div id="bar"><div id="cluster">
   <div class="pair"><button aria-label="Audio settings">^</button><button data-is-muted="false" aria-label="Turn off microphone (⌘+d)">mic</button></div>
   <div class="pair"><button aria-label="Video settings">^</button><button data-is-muted="false" aria-label="Turn off camera (⌘+e)">cam</button></div>
   <button>a</button><button>b</button><button>c</button><button>d</button>
   <button aria-label="👍" data-emoji="👍" onclick="mockLog.push('react 👍')"><img alt="👍" data-emoji="👍"></button>
+  <!-- "More emojis": a picker that only renders the row in view, like Meet's. -->
+  <button aria-label="More emojis" aria-controls="picker" onclick="togglePicker()"><i>add_reaction</i></button>
   <button aria-label="Chat with everyone" onclick="mockLog.push('chat panel'); chatPanel.childElementCount ? chatPanel.replaceChildren() : chatPanel.append(chatBox.content.cloneNode(true))"><i>chat</i></button>
   <button aria-label="Leave call" onclick="mockLog.push('leave')"><i>call_end</i></button>
 </div></div>
@@ -112,6 +129,11 @@
       }
       document.querySelector('[data-sender-name]').insertAdjacentHTML('afterend', '<div data-sender-name="Victoria Winters"><div data-message-id="m2">All should just be called that going forward</div></div>');
     }, 400);
+    // Your own message as Meet announces it: just the text, then the pin icon's name.
+    setTimeout(() => {
+      const d = document.createElement('div'); d.innerHTML = '<div>my own note</div><button aria-label="Pin message"><i></i></button>'; l.append(d);
+      d.querySelector('i').textContent = 'keep';
+    }, 900);
     for (const e of ['👍','🎉','💖']) { const r = document.createElement('div'); document.body.append(r); r.innerHTML = '<span><img alt="'+e+'"></span>'; }
   };
   // Time spent in content.js's frame callback.

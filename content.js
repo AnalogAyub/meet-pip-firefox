@@ -328,13 +328,14 @@
         const said = parts.map(p => p.match(SAYS_RE)).filter(Boolean);
         for (const [, sender, body] of said) pushChat('a:' + sender + body, sender, body);
         const rest = parts.filter(p => !SAYS_RE.test(p) && !said.some(([, sender, body]) => p === sender || body.includes(p)));
-        if (!rest.length) return;
-        const sender = rest.length > 1 && rest[0].length <= 40 ? rest.shift() : '';
-        const body = rest.join(' ');
-        pushChat('a:' + sender + body, sender, body);
+        // Someone else's message has a header: their name, then the time.
+        // Your own has neither, so without a time there is no sender.
+        const sender = rest.length > 2 && TIME_RE.test(rest[1]) && rest[0].length <= 40 ? rest.shift() : '';
+        const body = rest.filter(p => !TIME_RE.test(p)).join(' ');
+        if (body) pushChat('a:' + sender + body, sender, body);
       }, 250);
     }
-    if (!TIME_RE.test(text) && !parts.includes(text)) parts.push(text);
+    if (!parts.includes(text)) parts.push(text);
   }
   function textPieces(node) {
     if (node.nodeType === 3) return [node.data.trim()];
@@ -358,6 +359,8 @@
       if (!host || root.contains(host)) continue;
       const live = host.closest('[aria-live]');
       if (live) {
+        // A message's pin button and its icon name ("keep") are not the message.
+        if (host.closest(NOT_MESSAGE)) continue;
         // Search counts and the like from pickers and menus.
         if (live.closest('[role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="search"], form')) continue;
         const text = (rec.type === 'characterData' ? rec.target.data : [...rec.addedNodes].map(n => n.textContent).join(' ')).trim();
@@ -828,11 +831,33 @@
       await wait(100);
     }
   }
+  // The "More emojis" picker only renders the rows in view, so scroll through
+  // it until the wanted emoji turns up. Closes the picker if it never does.
+  async function findInPicker(find) {
+    const more = iconButton('add_reaction');
+    if (!more) return null;
+    const dialog = () => document.getElementById(more.getAttribute('aria-controls'));
+    if (!dialog()) more.click();
+    const list = await until(() => dialog()?.querySelector('[role="menu"]'), 2000);
+    if (!list) return null;
+    let scroller = list;
+    while (scroller && scroller !== dialog() && scroller.scrollHeight <= scroller.clientHeight + 10) scroller = scroller.parentElement;
+    for (let i = 0; i < 80; i++) {
+      const btn = find(dialog());
+      if (btn) return btn;
+      const before = scroller.scrollTop;
+      scroller.scrollTop += Math.max(80, scroller.clientHeight - 40);
+      await wait(60);
+      if (scroller.scrollTop === before) break;   // reached the end
+    }
+    if (dialog()) more.click();
+    return null;
+  }
   const COMMANDS = {
     hello: () => sendState(true),
     // Diagnostics: copy(document.documentElement.dataset.meetPipLog) in the console.
     debug() {
-      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.12', rows: chat, log: chatLog }, null, 1);
+      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.13', rows: chat, log: chatLog }, null, 1);
     },
     mic: () => clickMic(),
     cam() {
@@ -841,23 +866,18 @@
     },
     async react({ emoji }) {
       if (typeof emoji !== 'string' || emoji.length > 16 || !EMOJI_RE.test(emoji)) return;
-      const find = () => [...document.querySelectorAll('button, [role="button"], [role="option"], [role="gridcell"]')].find(b =>
-        outsideTiles(b) && !root.contains(b) && (b.dataset.emoji === emoji || b.getAttribute('aria-label') === emoji ||
-          b.querySelector('img')?.alt === emoji || b.textContent.trim() === emoji));
-      let btn = find();
+      // Meet's reaction buttons carry data-emoji. Compare without the
+      // variation selector, which a typed emoji may or may not include.
+      const plain = e => (e || '').replace(/\uFE0F/g, '');
+      const want = plain(emoji);
+      const find = scope => [...scope.querySelectorAll('button[data-emoji]')].find(b => plain(b.dataset.emoji) === want && outsideTiles(b));
+      let btn = find(document);
       if (!btn) {
         // The reaction bar is closed.
         (labelButton(/^send a reaction/i) || iconButton('mood'))?.click();
-        btn = await until(find, 1500);
+        btn = await until(() => find(document), 1500);
       }
-      if (!btn) {
-        // Not one of the quick reactions: look in the full picker.
-        const more = iconButton('add_reaction') || labelButton(/^more emojis/i);
-        more?.click();
-        btn = await until(find, 2000);
-        // Not there either; close the picker again.
-        if (!btn) more?.click();
-      }
+      if (!btn) btn = await findInPicker(find);
       btn?.click();
     },
     async chat({ text }) {
