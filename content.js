@@ -41,9 +41,17 @@
   // Meet's DOM. aria-labels are localized, so buttons are matched by label,
   // then by toolbar order (microphone, camera).
   const MEET = {
+    // Asked for several times per sync; one page-wide query per 250ms is enough.
     toggleButtons() {
-      return [...document.querySelectorAll('button[data-is-muted]')];
+      const now = performance.now();
+      if (now - this.buttonsAt > 250) {
+        this.buttons = [...document.querySelectorAll('button[data-is-muted]')];
+        this.buttonsAt = now;
+      }
+      return this.buttons;
     },
+    buttons: [],
+    buttonsAt: -1e9,
     micButton() {
       const btns = this.toggleButtons();
       return btns.find(b => /mic|mikro|micr/i.test(b.getAttribute('aria-label') || '')) || btns[0] || null;
@@ -119,7 +127,8 @@
     const now = performance.now();
     for (const rec of records) {
       const el = rec.target;
-      if (!el.matches('[jsname="QgSmzd"], [jsname="QgSmzd"] *') && !el.closest('[jsname="qmYRK"]') && !el.querySelector(':scope > [jsname="qmYRK"], :scope > * > [jsname="qmYRK"]')) continue;
+      if (el.getAttribute('jsname') !== 'QgSmzd' && !el.closest('[jsname="QgSmzd"], [jsname="qmYRK"]') &&
+          !el.querySelector(':scope > [jsname="qmYRK"], :scope > * > [jsname="qmYRK"]')) continue;
       const tile = el.closest('[data-participant-id]');
       if (!tile) continue;
       let b = bursts.get(tile);
@@ -133,6 +142,18 @@
       speaker.t = now;
     }
   });
+  // Watch class changes inside tiles only; page-wide, Meet makes far too many.
+  // Returns the number of tiles.
+  let watchedTiles = new WeakSet();
+  function watchTiles() {
+    const tiles = MEET.tiles();
+    for (const tile of tiles) {
+      if (watchedTiles.has(tile)) continue;
+      watchedTiles.add(tile);
+      speakObserver.observe(tile, { attributes: true, attributeFilter: ['class'], subtree: true });
+    }
+    return tiles.length;
+  }
   // Puts the last speaker in the first `limit` entries if they are further down.
   function withSpeaker(list, limit) {
     const shown = list.slice(0, limit);
@@ -169,7 +190,7 @@
       byTile.set(sp, { video: null, tile: sp, area: 0, presentation: false, muted: tileMuted(sp), name: tileName(sp) });
     }
     sources = [...byTile.values()].sort((a, b) => b.area - a.area);
-    othersCount = Math.max(0, MEET.tiles().length - 1);
+    othersCount = Math.max(0, watchTiles() - 1);
   }
   // Per frame: cheap liveness checks only.
   function sourceVideos() {
@@ -771,11 +792,8 @@
     if (inCall !== state.inCall) {
       state.inCall = inCall;
       root.classList.toggle('meet-pip-hidden', !inCall);
-      if (inCall) {
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-        speakObserver.observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
-      }
-      else { observer.disconnect(); speakObserver.disconnect(); speaker.tile = null; chat.length = 0; reactions.length = 0; }
+      if (inCall) observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      else { observer.disconnect(); speakObserver.disconnect(); watchedTiles = new WeakSet(); speaker.tile = null; chat.length = 0; reactions.length = 0; }
       log(inCall ? 'call started' : 'call ended');
     }
     if (!inCall) return;
