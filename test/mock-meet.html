@@ -24,13 +24,13 @@
   <div class="tile" data-participant-id="p1" style="grid-row: span 3"><video autoplay muted playsinline></video>
     <button aria-label="Pin Alice to your main screen"><i hidden>keep_outline</i></button><div role="tooltip" hidden>Pin Alice to your main screen</div>
     <button jsname="LgbsSe" aria-label="Mute Alice's microphone"><i hidden>mic_none</i></button><div role="tooltip" hidden>Mute</div>
-    <span hidden>Alice</span></div>
+    <div jsname="QgSmzd" class="gjg47c"></div><span class="notranslate" hidden>Alice Anders</span></div>
   <div class="tile" data-participant-id="p2"><video autoplay muted playsinline></video>
     <button jsname="LgbsSe" disabled aria-label="You can't unmute someone else"><i hidden>mic_off</i></button>
-    <span hidden>Bob Builder</span></div>
+    <div jsname="QgSmzd" class="gjg47c"></div><span class="notranslate" hidden>Bob Builder</span></div>
   <div class="tile" data-participant-id="p3"><video autoplay muted playsinline></video><video autoplay muted playsinline style="position:absolute;width:40%;height:40%;left:0;top:0"></video>
     <button jsname="LgbsSe" aria-label="Mute Carla's microphone"><i hidden>mic_none</i></button>
-    <span hidden>Carla</span></div>
+    <div jsname="QgSmzd" class="gjg47c"></div><span class="notranslate" hidden>Carla Castellanos-Whitfield</span></div>
   <div class="tile self" data-participant-id="p4"><video autoplay muted playsinline></video></div>
 </div>
 <div id="live" aria-live="polite" style="position:absolute;left:-999px"></div>
@@ -46,7 +46,7 @@
   // ?n=9: that many other participants instead of 3.
   if (q.has('n')) document.querySelectorAll('.tile:not(.self)').forEach((t, k) => { if (k >= +q.get('n')) t.remove(); });
   for (let k = 4; k <= +q.get('n'); k++) {
-    document.querySelector('.tile.self').insertAdjacentHTML('beforebegin', `<div class="tile" data-participant-id="x${k}"><video autoplay muted playsinline></video></div>`);
+    document.querySelector('.tile.self').insertAdjacentHTML('beforebegin', `<div class="tile" data-participant-id="x${k}"><video autoplay muted playsinline></video><button jsname="LgbsSe"><i hidden>mic_none</i></button><div jsname="QgSmzd" class="gjg47c"></div><span class="notranslate" hidden>Guest ${k}</span></div>`);
   }
   document.querySelectorAll('.tile').forEach((tile, i) => {
     const c = document.createElement('canvas'); c.width = i === 0 && present ? 1600 : 640; c.height = i === 0 && present ? 900 : 360;
@@ -84,6 +84,13 @@
   document.querySelectorAll('#bar button[data-is-muted]').forEach(b => b.addEventListener('click', () => {
     b.dataset.isMuted = b.dataset.isMuted === 'true' ? 'false' : 'true';
   }));
+  // ?speaker=3: that participant (1-based) talks; add &camoff to drop their video.
+  if (q.has('speaker')) {
+    const tile = document.querySelectorAll('.tile:not(.self)')[+q.get('speaker') - 1];
+    if (q.has('camoff')) tile.querySelectorAll('video').forEach(v => v.remove());
+    const ring = tile.querySelector('[jsname=QgSmzd]');
+    setInterval(() => { ring.className = ring.className === 'gjg47c' ? 'HX2H7' : 'gjg47c'; }, 150);
+  }
   window.sim = () => {
     const l = document.getElementById('live');
     for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...', '35 results.', 'Erin says: here is a much longer message that will not fit on a single line and so has to scroll sideways to be read', 'Dana Lee joined', 'Dana Lee has left the meeting', 'Dana Lee has started transcription', 'Transcription has started', 'Weekly sync panel is open', 'You reacted with 👍.']) {

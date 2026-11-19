@@ -105,6 +105,42 @@
     return null;
   }
 
+  function tileName(tile) {
+    return tile?.querySelector('span.notranslate')?.textContent.trim() || '';
+  }
+
+  // Who is speaking. Meet animates a tile's voice indicator by changing its
+  // classes several times a second while that person talks, so a burst of
+  // class changes there marks the speaker. `tile` stays set after they stop,
+  // so their tile keeps its place until someone else talks.
+  const speaker = { tile: null, t: 0 };
+  const bursts = new WeakMap();
+  const speakObserver = new MutationObserver(records => {
+    const now = performance.now();
+    for (const rec of records) {
+      const el = rec.target;
+      if (!el.matches('[jsname="QgSmzd"], [jsname="QgSmzd"] *') && !el.closest('[jsname="qmYRK"]') && !el.querySelector(':scope > [jsname="qmYRK"], :scope > * > [jsname="qmYRK"]')) continue;
+      const tile = el.closest('[data-participant-id]');
+      if (!tile) continue;
+      let b = bursts.get(tile);
+      if (!b || now - b.start > 1000) bursts.set(tile, b = { start: now, n: 0 });
+      if (++b.n < 3) continue;
+      // Not you (your tile has no "mute this person" button) or a shared screen.
+      if (tile !== speaker.tile) {
+        if (!tile.querySelector('[jsname="LgbsSe"]') || tileIcons(tile).has('zoom_in')) continue;
+        speaker.tile = tile;
+      }
+      speaker.t = now;
+    }
+  });
+  // Puts the last speaker in the first `limit` entries if they are further down.
+  function withSpeaker(list, limit) {
+    const shown = list.slice(0, limit);
+    const i = list.findIndex(e => e.tile === speaker.tile);
+    if (i >= limit) shown[limit - 1] = list[i];
+    return shown;
+  }
+
   // Tiles to draw, largest first. Needs layout, so sync() rebuilds it twice a
   // second instead of every frame.
   let sources = [];
@@ -122,17 +158,22 @@
       const info = tileInfo(v);
       if (info.self && !CONFIG.showSelf) continue;
       const tile = v.closest('[data-participant-id]');
-      const entry = { video: v, area: r.width * r.height, presentation: info.presentation, muted: info.presentation ? null : tileMuted(tile) };
+      const entry = { video: v, tile, area: r.width * r.height, presentation: info.presentation, muted: info.presentation ? null : tileMuted(tile), name: tileName(tile) };
       // A tile can hold two videos of the same person; keep the larger.
       const key = tile || v;
       if (!byTile.has(key) || byTile.get(key).area < entry.area) byTile.set(key, entry);
+    }
+    // The last speaker gets a tile even with their camera off.
+    const sp = speaker.tile;
+    if (sp && sp.isConnected && !byTile.has(sp)) {
+      byTile.set(sp, { video: null, tile: sp, area: 0, presentation: false, muted: tileMuted(sp), name: tileName(sp) });
     }
     sources = [...byTile.values()].sort((a, b) => b.area - a.area);
     othersCount = Math.max(0, MEET.tiles().length - 1);
   }
   // Per frame: cheap liveness checks only.
   function sourceVideos() {
-    return sources.filter(e => e.video.isConnected && e.video.readyState >= 2 && e.video.videoWidth && !e.video.paused);
+    return sources.filter(e => e.video ? e.video.isConnected && e.video.readyState >= 2 && e.video.videoWidth && !e.video.paused : e.tile.isConnected);
   }
 
   // Chat + reactions
@@ -428,7 +469,41 @@
   }
   // Mic badge in a tile's top-right corner.
   function drawTile(entry, x, y, w, h) {
-    drawCover(entry.video, x, y, w, h);
+    const isSpeaker = entry.tile && entry.tile === speaker.tile;
+    if (entry.video) {
+      drawCover(entry.video, x, y, w, h);
+    } else {
+      // Camera off: a plain tile with the name.
+      ctx.fillStyle = '#2b2c2f';
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, u(14));
+      ctx.fill();
+    }
+    if (isSpeaker && entry.name) {
+      // Name, bottom left.
+      const fs = Math.max(u(18), Math.min(u(24), w * 0.085)), pad = fs * 0.45;
+      ctx.font = `500 ${fs}px ${FONT}`;
+      let name = entry.name;
+      while (name.length > 3 && ctx.measureText(name).width > w - pad * 4) name = name.slice(0, -2).trimEnd() + '…';
+      const tw = ctx.measureText(name).width;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.beginPath();
+      ctx.roundRect(x + pad, y + h - pad - fs * 1.5, tw + pad * 2, fs * 1.5, fs * 0.4);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(name, x + pad * 2, y + h - pad - fs * 0.72);
+    }
+    if (isSpeaker && performance.now() - speaker.t < 2500) {
+      // Outline while they are talking.
+      const lw = u(4);
+      ctx.strokeStyle = '#8ab4f8';
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.roundRect(x + lw / 2, y + lw / 2, w - lw, h - lw, u(14));
+      ctx.stroke();
+    }
     if (!CONFIG.showTileMic || entry.muted === null) return;
     const d = Math.max(u(34), Math.min(u(52), w * 0.2)), m = d * 0.22;
     statusBlock(x + w - d - m, y + m, d, d, !entry.muted, entry.muted ? 'micOff' : 'micOn');
@@ -521,7 +596,7 @@
     const videos = sourceVideos();
     const stageIdx = videos.findIndex(v => v.presentation);
     if (stageIdx >= 0) {
-      composePresenting(videos[stageIdx], videos.filter((_, i) => i !== stageIdx).slice(0, CONFIG.maxStripTiles));
+      composePresenting(videos[stageIdx], withSpeaker(videos.filter((_, i) => i !== stageIdx), CONFIG.maxStripTiles));
       return;
     }
 
@@ -530,7 +605,7 @@
     setSize(w, H, w / 720);
     const chatLayout = layoutChat();
     const over = videos.length > CONFIG.maxGridTiles;
-    const shown = over ? videos.slice(0, CONFIG.maxGridTiles - 1) : videos;
+    const shown = over ? withSpeaker(videos, CONFIG.maxGridTiles - 1) : videos;
     const n = shown.length + (over ? 1 : 0);
     const cols = gridCols(n), rows = Math.ceil(n / cols), gap = u(8);
     const cellH = (w - gap * (cols + 1)) / cols * 1.25;
@@ -696,8 +771,11 @@
     if (inCall !== state.inCall) {
       state.inCall = inCall;
       root.classList.toggle('meet-pip-hidden', !inCall);
-      if (inCall) observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-      else { observer.disconnect(); chat.length = 0; reactions.length = 0; }
+      if (inCall) {
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        speakObserver.observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+      }
+      else { observer.disconnect(); speakObserver.disconnect(); speaker.tile = null; chat.length = 0; reactions.length = 0; }
       log(inCall ? 'call started' : 'call ended');
     }
     if (!inCall) return;

@@ -25,6 +25,8 @@ Firefox's built-in PiP show that video.
 - New chat messages show for 6 seconds, one line each; a long one scrolls.
   Reactions float up over the video.
 - Each participant tile has a mic badge showing whether they are muted.
+- Whoever spoke last always has a tile, with their name on it and an outline
+  while they talk, even with their camera off.
 - Meet is not told that PiP is open or that its tab is hidden, so it keeps the
   layout you left.
 - The PiP window's mute button toggles Meet's microphone.
