@@ -50,6 +50,21 @@ To run from source, load `manifest.json` from `about:debugging` → This Firefox
 npx web-ext run --source-dir . --firefox "/Applications/Zen Browser.app/Contents/MacOS/zen"
 ```
 
+## Zen mod (optional)
+
+`sine-mod/` is a [Sine](https://github.com/CosmoCreeper/Sine) mod for Zen that
+replaces the PiP window's play and mute controls, for Meet calls only, with a
+bar that appears on hover:
+
+- mic and camera buttons that show the current state
+- six quick reactions
+- a chat box (Enter sends)
+- end call, which leaves the call and closes the tab
+
+It needs the extension, which carries out the commands in the Meet tab. Install
+it in the profile you take calls in: Sine settings, add mod from repository,
+`AnalogAyub/meet-pip-firefox/tree/main/sine-mod`.
+
 ## Settings
 
 In `about:config`:

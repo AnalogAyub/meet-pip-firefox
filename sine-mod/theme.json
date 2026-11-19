@@ -1,0 +1,14 @@
+{
+  "id": "meet-pip",
+  "name": "Meet PiP controls",
+  "description": "Adds real buttons to the Picture-in-Picture window of a Google Meet call: mic, camera, quick reactions, a chat box and end call. Needs the Meet PiP for Firefox extension.",
+  "version": "0.2.0",
+  "author": "AnalogAyub",
+  "homepage": "https://github.com/AnalogAyub/meet-pip-firefox",
+  "fork": ["zen"],
+  "scripts": {
+    "meet-pip.uc.js": {
+      "include": ["chrome://global/content/pictureinpicture/player.xhtml"]
+    }
+  }
+}

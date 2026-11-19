@@ -507,20 +507,33 @@
       ctx.fill();
     }
     if (isSpeaker && entry.name) {
-      // Name, bottom left.
+      // Name, bottom left. One too long for the tile scrolls round slowly.
       const fs = Math.max(u(18), Math.min(u(24), w * 0.085)), pad = fs * 0.45;
       ctx.font = `500 ${fs}px ${FONT}`;
-      let name = entry.name;
-      while (name.length > 3 && ctx.measureText(name).width > w - pad * 4) name = name.slice(0, -2).trimEnd() + '…';
-      const tw = ctx.measureText(name).width;
+      const tw = ctx.measureText(entry.name).width;
+      const boxW = Math.min(tw, w - pad * 4);
+      const bx = x + pad, by = y + h - pad - fs * 1.5;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
       ctx.beginPath();
-      ctx.roundRect(x + pad, y + h - pad - fs * 1.5, tw + pad * 2, fs * 1.5, fs * 0.4);
+      ctx.roundRect(bx, by, boxW + pad * 2, fs * 1.5, fs * 0.4);
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(name, x + pad * 2, y + h - pad - fs * 0.72);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(bx + pad, by, boxW, fs * 1.5);
+      ctx.clip();
+      const ty = by + fs * 0.78;
+      if (tw <= boxW) {
+        ctx.fillText(entry.name, bx + pad, ty);
+      } else {
+        const lap = tw + fs * 2;
+        const shift = (performance.now() / 1000 * fs * 1.2) % lap;
+        ctx.fillText(entry.name, bx + pad - shift, ty);
+        ctx.fillText(entry.name, bx + pad - shift + lap, ty);
+      }
+      ctx.restore();
     }
     if (isSpeaker && performance.now() - speaker.t < 2500) {
       // Outline while they are talking.
@@ -744,6 +757,85 @@
   }
   dock.addEventListener('click', togglePip);
 
+  // Commands from the companion Zen mod, which adds real buttons to the PiP
+  // window. They arrive as `meet-pip-command` events carrying JSON; mic and
+  // camera state goes back as `meet-pip-state`. Without the mod nothing sends
+  // or listens.
+  const outsideTiles = b => b && !b.closest('[data-participant-id]');
+  function iconButton(...names) {
+    for (const icon of document.querySelectorAll('button i')) {
+      if (names.includes(icon.textContent.trim()) && outsideTiles(icon)) return icon.closest('button');
+    }
+    return null;
+  }
+  function labelButton(re) {
+    return [...document.querySelectorAll('button[aria-label]')].find(b => re.test(b.getAttribute('aria-label')) && outsideTiles(b)) || null;
+  }
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  async function until(find, ms) {
+    const end = performance.now() + ms;
+    for (;;) {
+      const found = find();
+      if (found || performance.now() > end) return found;
+      await wait(100);
+    }
+  }
+  const COMMANDS = {
+    hello: () => sendState(true),
+    mic: () => clickMic(),
+    cam() {
+      MEET.camButton()?.click();
+      setTimeout(sync, 150);
+    },
+    async react({ emoji }) {
+      if (typeof emoji !== 'string' || emoji.length > 12 || !EMOJI_RE.test(emoji)) return;
+      const find = () => [...document.querySelectorAll('button')].find(b =>
+        outsideTiles(b) && (b.getAttribute('aria-label') === emoji || b.querySelector('img')?.alt === emoji));
+      let btn = find();
+      if (!btn) {
+        // The reaction bar is closed.
+        (labelButton(/^send a reaction/i) || iconButton('mood', 'add_reaction'))?.click();
+        btn = await until(find, 1500);
+      }
+      btn?.click();
+    },
+    async chat({ text }) {
+      text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      if (!text) return;
+      // Only the chat box; Meet has other text fields (Gemini).
+      const box = () => [...document.querySelectorAll('textarea')].find(t => /send a message|message to everyone/i.test(t.getAttribute('aria-label') || t.placeholder || ''));
+      let field = box(), opener = null;
+      if (!field) {
+        opener = labelButton(/^chat with everyone/i) || iconButton('chat', 'chat_bubble');
+        opener?.click();
+        field = await until(box, 2500);
+      }
+      if (!field) return;
+      field.focus();
+      field.value = text;
+      field.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+      const send = await until(() => [...document.querySelectorAll('button')].find(b =>
+        !b.disabled && /^send a message/i.test(b.getAttribute('aria-label') || '')), 1000);
+      send?.click();
+      await wait(300);
+      opener?.click();
+    },
+    leave: () => (labelButton(/^leave call/i) || iconButton('call_end'))?.click(),
+  };
+  document.addEventListener('meet-pip-command', e => {
+    let c;
+    try { c = JSON.parse(e.detail); } catch (err) { return; }
+    if (!state.inCall || !c || !Object.hasOwn(COMMANDS, c.cmd)) return;
+    Promise.resolve(COMMANDS[c.cmd](c)).catch(err => log('command failed', c.cmd, err));
+  });
+  let lastState = '';
+  function sendState(force) {
+    const now = JSON.stringify({ mic: !state.micOff, cam: !state.camOff });
+    if (!force && now === lastState) return;
+    lastState = now;
+    document.dispatchEvent(new CustomEvent('meet-pip-state', { detail: now }));
+  }
+
   // Left of the whole control cluster; the mic button has a chevron beside it.
   function positionDock() {
     const mic = MEET.micButton();
@@ -806,6 +898,7 @@
 
     state.micOff = MEET.isOff(MEET.micButton());
     state.camOff = MEET.isOff(MEET.camButton());
+    sendState(false);
     scanChat();
     positionDock();
 

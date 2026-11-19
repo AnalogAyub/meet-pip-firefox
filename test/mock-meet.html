@@ -35,11 +35,18 @@
 </div>
 <div id="live" aria-live="polite" style="position:absolute;left:-999px"></div>
 <div style="display:none"><div data-sender-name="Bob Builder"><div data-message-id="m1">Can everyone see the deck? I will drop the link in here in a second so you can follow along with the numbers</div></div></div>
+<!-- Chat panel: the textarea only exists while the panel is open. -->
+<div id="chatPanel" hidden></div>
+<template id="chatBox"><textarea aria-label="Send a message"></textarea>
+  <button aria-label="Send a message" onclick="mockLog.push('sent: ' + this.previousElementSibling.value)">send</button></template>
+<script>window.mockLog = [];</script>
 <div id="bar"><div id="cluster">
   <div class="pair"><button aria-label="Audio settings">^</button><button data-is-muted="false" aria-label="Turn off microphone (⌘+d)">mic</button></div>
   <div class="pair"><button aria-label="Video settings">^</button><button data-is-muted="false" aria-label="Turn off camera (⌘+e)">cam</button></div>
   <button>a</button><button>b</button><button>c</button><button>d</button>
-  <button aria-label="Leave call">x</button>
+  <button aria-label="👍" onclick="mockLog.push('react 👍')"><img alt="👍"></button>
+  <button aria-label="Chat with everyone" onclick="mockLog.push('chat panel'); chatPanel.childElementCount ? chatPanel.replaceChildren() : chatPanel.append(chatBox.content.cloneNode(true))"><i>chat</i></button>
+  <button aria-label="Leave call" onclick="mockLog.push('leave')"><i>call_end</i></button>
 </div></div>
 <script>
   const q = new URLSearchParams(location.search), present = q.has('present');
