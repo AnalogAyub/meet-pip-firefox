@@ -928,7 +928,7 @@
     hello: () => sendState(true),
     // Diagnostics: copy(document.documentElement.dataset.meetPipLog) in the console.
     debug() {
-      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.15', rows: chat, log: chatLog }, null, 1);
+      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.16', rows: chat, log: chatLog }, null, 1);
     },
     mic: () => clickMic(),
     cam() {
@@ -950,8 +950,14 @@
         bar.click();
         btn = await until(() => find(document), 1500);
       }
-      if (!btn) btn = await findInPicker(find);
-      btn?.click();
+      if (btn) { btn.click(); return; }
+      btn = await findInPicker(find);
+      if (!btn) return;
+      btn.click();
+      // Meet leaves the picker open after a pick; close it.
+      await wait(250);
+      const more = iconButton('add_reaction');
+      if (more && document.getElementById(more.getAttribute('aria-controls'))) more.click();
     },
     async chat({ text }) {
       text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 500);

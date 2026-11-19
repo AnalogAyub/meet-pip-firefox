@@ -95,7 +95,8 @@
       const log = (...a) => console.log("[meet-pip] camera:", ...a);
       log("clicked; camera reported as", camOn === null ? "unknown" : camOn ? "on" : "off");
       if (camOn === true) return;
-      const win = browser.ownerGlobal;
+      // The window holding the tab: documentGlobal in current Firefox, ownerGlobal before.
+      const win = browser.documentGlobal || browser.ownerGlobal;
       const tabs = win?.gBrowser;
       const meetTab = tabs?.getTabForBrowser(browser);
       if (!meetTab) { log("could not find the Meet tab"); return; }
@@ -116,7 +117,7 @@
       send({ cmd: "leave" });
       // Give Meet a moment to hang up, then close its tab. The PiP window goes with it.
       setTimeout(() => {
-        const gBrowser = browser.getTabBrowser?.();
+        const gBrowser = (browser.documentGlobal || browser.ownerGlobal)?.gBrowser || browser.getTabBrowser?.();
         const tab = gBrowser?.getTabForBrowser(browser);
         if (tab) gBrowser.removeTab(tab);
       }, 700);

@@ -49,7 +49,7 @@
     const rows = ['😀', '🤖', '🦄', '🌶️'];
     const render = () => {
       const row = Math.min(rows.length - 1, Math.floor(panel.scrollTop / 500));
-      menu.innerHTML = `<button role="menuitem" data-emoji="${rows[row]}" style="position:absolute;top:${panel.scrollTop}px" onclick="mockLog.push('react ${rows[row]}'); togglePicker()">${rows[row]}</button>`;
+      menu.innerHTML = `<button role="menuitem" data-emoji="${rows[row]}" style="position:absolute;top:${panel.scrollTop}px" onclick="mockLog.push('react ${rows[row]}')">${rows[row]}</button>`;
     };
     panel.addEventListener('scroll', render);
     render();
@@ -62,7 +62,7 @@
   <button aria-label="Send a reaction" aria-pressed="true" onclick="mockLog.push('reaction bar toggled')"><i>mood</i></button>
   <button aria-label="👍" data-emoji="👍" onclick="mockLog.push('react 👍')"><img alt="👍" data-emoji="👍"></button>
   <!-- "More emojis": a picker that only renders the row in view, like Meet's. -->
-  <button aria-label="More emojis" aria-controls="picker" onclick="togglePicker()"><i>add_reaction</i></button>
+  <button aria-label="More emojis" aria-controls="picker" onclick="mockLog.push('picker toggled'); togglePicker()"><i>add_reaction</i></button>
   <button aria-label="Chat with everyone" onclick="mockLog.push('chat panel'); chatPanel.childElementCount ? chatPanel.replaceChildren() : chatPanel.append(chatBox.content.cloneNode(true))"><i>chat</i></button>
   <button aria-label="Raise hand (ctrl + ⌘ + h)" aria-pressed="false" id="handBtn"><i>back_hand</i></button>
   <button aria-label="Leave call" onclick="mockLog.push('leave')"><i>call_end</i></button>
