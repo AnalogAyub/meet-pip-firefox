@@ -6,7 +6,7 @@ state in an always-on-top window, and opens when you leave the tab.
 
 | Presenting | Not presenting |
 | --- | --- |
-| <img src="screenshots/presenting.png" width="420" alt="PiP while someone presents: slide on top, chat, participant tiles and mic/camera indicators underneath"> | <img src="screenshots/grid.png" width="240" alt="PiP without a presentation: participant grid, chat and mic/camera indicators"> |
+| <img src="screenshots/presenting.png" width="420" alt="PiP while someone presents: slide on top, a chat row, then participant tiles with mic badges, the speaker named and outlined, and your own tile on the right"> | <img src="screenshots/grid.png" width="240" alt="PiP without a presentation: a grid of equal tiles with mic badges, the speaker named and outlined, your own tile last, and a chat row"> |
 
 Screenshots are from the test page, not a real call.
 
