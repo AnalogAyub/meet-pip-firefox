@@ -62,7 +62,7 @@ bar that appears on hover:
 - mic and camera buttons that show the current state. Turning the camera on
   shows the Meet tab for a moment, because Firefox only grants the camera to
   the selected tab
-- six quick reactions, and a + for any other emoji
+- six quick reactions, and a + that opens the macOS emoji picker for any other
 - a chat box (Enter sends)
 - end call, which leaves the call and closes the tab
 

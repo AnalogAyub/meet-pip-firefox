@@ -31,6 +31,29 @@
     }
   `);
 
+  // Opens the macOS "Emoji & Symbols" picker, the one Ctrl+Cmd+Space opens.
+  // Firefox has no script API for it, so this sends AppKit the same message
+  // the Edit menu item does: [NSApp orderFrontCharacterPalette:nil].
+  function showSystemEmojiPicker() {
+    if (Services.appinfo.OS !== "Darwin") return;
+    let objc;
+    try {
+      const { ctypes } = ChromeUtils.importESModule("resource://gre/modules/ctypes.sys.mjs");
+      objc = ctypes.open("/usr/lib/libobjc.A.dylib");
+      const ptr = ctypes.voidptr_t;
+      const getClass = objc.declare("objc_getClass", ctypes.default_abi, ptr, ctypes.char.ptr);
+      const selector = objc.declare("sel_registerName", ctypes.default_abi, ptr, ctypes.char.ptr);
+      const call = objc.declare("objc_msgSend", ctypes.default_abi, ptr, ptr, ptr);
+      const callWithArg = objc.declare("objc_msgSend", ctypes.default_abi, ctypes.void_t, ptr, ptr, ptr);
+      const app = call(getClass("NSApplication"), selector("sharedApplication"));
+      callWithArg(app, selector("orderFrontCharacterPalette:"), null);
+    } catch (e) {
+      console.warn("[meet-pip] could not open the macOS emoji picker; type or paste an emoji instead", e);
+    } finally {
+      try { objc?.close(); } catch (e) { /* ignore */ }
+    }
+  }
+
   // Material mic, mic_off, videocam, videocam_off, call_end.
   const ICONS = {
     micOn: "M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z",
@@ -137,12 +160,22 @@
         if (tab) gBrowser.removeTab(tab);
       }, 700);
     });
-    // Any other emoji: "+" shows a small box to type or paste one into
-    // (Ctrl+Cmd+Space opens the macOS emoji picker).
+    // Any other emoji: "+" shows a small box and opens the macOS emoji picker on it.
     const custom = el("input", { type: "text", class: "emoji", placeholder: "🙂", maxlength: "16", hidden: "" });
     const more = button({ class: "react", title: "Another emoji" }, "＋", () => {
       custom.hidden = !custom.hidden;
-      if (!custom.hidden) custom.focus();
+      if (custom.hidden) return;
+      // The macOS picker types into whatever has focus, so focus the box first.
+      custom.focus();
+      showSystemEmojiPicker();
+    });
+    // Whatever the picker (or a paste) puts in the box is sent straight away.
+    custom.addEventListener("input", () => {
+      const first = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(custom.value.trim())][0]?.segment;
+      if (!first || !/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(first)) return;
+      send({ cmd: "react", emoji: first });
+      custom.value = "";
+      custom.hidden = true;
     });
     const bar = el("div", { id: "meetpip-bar" },
       el("div", { class: "row reactions" },
