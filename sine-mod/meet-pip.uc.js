@@ -100,14 +100,23 @@
       const tabs = win?.gBrowser;
       const meetTab = tabs?.getTabForBrowser(browser);
       if (!meetTab) { log("could not find the Meet tab"); return; }
+      // The tab to come back to, read now, before anything changes.
+      const previous = tabs.selectedTab;
+      const name = tab => (tab === meetTab ? "the Meet tab" : `"${(tab?.label || "?").slice(0, 30)}"`);
+      log("tab to return to:", name(previous));
       win.setTimeout(() => {
-        const previous = tabs.selectedTab;
-        if (previous !== meetTab) tabs.selectedTab = meetTab;
+        log("selected just before switching:", name(tabs.selectedTab));
+        if (tabs.selectedTab !== meetTab) tabs.selectedTab = meetTab;
         win.focus();
         log("Meet tab selected:", tabs.selectedTab === meetTab, "| Meet window active:", Services.focus.activeWindow === win);
         win.setTimeout(() => {
           log("after 1.5s, Meet window active:", Services.focus.activeWindow === win, "| camera reported as", camOn === null ? "unknown" : camOn ? "on" : "off");
-          if (previous !== meetTab && tabs.selectedTab === meetTab && previous.isConnected) tabs.selectedTab = previous;
+          if (previous !== meetTab && previous.isConnected) {
+            tabs.selectedTab = previous;
+            log("switched back; now selected:", name(tabs.selectedTab));
+          } else {
+            log("not switching back; tab to return to is", name(previous), "| still open:", !!previous?.isConnected);
+          }
           if (!window.closed) window.focus();
         }, 1500);
       }, 200);
