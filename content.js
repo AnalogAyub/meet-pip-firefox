@@ -207,7 +207,7 @@
   const reactions = [];       // { emoji, t, x }
   const EMOJI_RE = /^(\p{Extended_Pictographic}|\p{Regional_Indicator})/u;
   // Announcements about Meet's own UI, not from people.
-  const ANNOUNCE_NOISE = /microphone|camera|\bpin|unpin|\bmute|captions|recording|press |shortcut|keyboard|loading|presentation|presenting|main screen|\bscreen\b|\btile|layout|spotlight|connect|network|quality|picture-in-picture|^\d+ results?\b|no results|^you reacted|panel (is )?(now )?(open|closed)|side panel|\b(joined|left)( the (call|meeting))?\.?$|transcri|taking notes/i;
+  const ANNOUNCE_NOISE = /microphone|camera|\bpin|unpin|\bmute|captions|recording|press |shortcut|keyboard|loading|presentation|presenting|main screen|\bscreen\b|\btile|layout|spotlight|connect|network|quality|picture-in-picture|^\d+ results?\b|no results|^you reacted|panel (is )?(now )?(open|closed)|side panel|\b(joined|left)( the (call|meeting))?\.?$|transcri|taking notes|^reducing noise/i;
 
   // Meet reports one message several ways (the chat panel, a toast, a
   // screen-reader line) and repeats them, so anything matching a row from the
@@ -928,7 +928,7 @@
     hello: () => sendState(true),
     // Diagnostics: copy(document.documentElement.dataset.meetPipLog) in the console.
     debug() {
-      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.16', rows: chat, log: chatLog }, null, 1);
+      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.17', rows: chat, log: chatLog }, null, 1);
     },
     mic: () => clickMic(),
     cam() {

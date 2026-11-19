@@ -126,7 +126,7 @@
   }, 1000);
   window.sim = () => {
     const l = document.getElementById('live');
-    for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...', '35 results.', 'Erin says: here is a much longer message that will not fit on a single line and so has to scroll sideways to be read', 'Dana Lee joined', 'Dana Lee has left the meeting', 'Dana Lee has started transcription', 'Transcription has started', 'Weekly sync panel is open', 'You reacted with 👍.']) {
+    for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...', '35 results.', 'Reducing noise', 'Erin says: here is a much longer message that will not fit on a single line and so has to scroll sideways to be read', 'Dana Lee joined', 'Dana Lee has left the meeting', 'Dana Lee has started transcription', 'Transcription has started', 'Weekly sync panel is open', 'You reacted with 👍.']) {
       const d = document.createElement('div'); d.textContent = text; l.append(d);
     }
     // As Meet does: a wrapper, then its emoji child, plus the announcement above.

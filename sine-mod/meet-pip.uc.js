@@ -160,12 +160,12 @@
         if (tab) gBrowser.removeTab(tab);
       }, 700);
     });
-    // Any other emoji: "+" shows a small box and opens the macOS emoji picker on it.
-    const custom = el("input", { type: "text", class: "emoji", placeholder: "🙂", maxlength: "16", hidden: "" });
+    // Any other emoji: "+" opens the macOS emoji picker, which types into a hidden box.
+    // Invisible: it only exists to receive what the macOS picker types.
+    const custom = el("input", { type: "text", class: "emoji", maxlength: "16", tabindex: "-1", "aria-label": "Another emoji" });
     const more = button({ class: "react", title: "Another emoji" }, "＋", () => {
-      custom.hidden = !custom.hidden;
-      if (custom.hidden) return;
       // The macOS picker types into whatever has focus, so focus the box first.
+      custom.value = "";
       custom.focus();
       showSystemEmojiPicker();
     });
@@ -175,7 +175,6 @@
       if (!first || !/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(first)) return;
       send({ cmd: "react", emoji: first });
       custom.value = "";
-      custom.hidden = true;
     });
     const bar = el("div", { id: "meetpip-bar" },
       el("div", { class: "row reactions" },
@@ -204,7 +203,6 @@
       // First emoji only, whole (flags and skin tones are several code points).
       const first = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)][0]?.segment;
       if (first) send({ cmd: "react", emoji: first });
-      custom.hidden = true;
     });
 
     const setIcon = (btn, name, off) => {
