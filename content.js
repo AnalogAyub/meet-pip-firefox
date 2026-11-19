@@ -231,13 +231,26 @@
     if (chat.length > 30) chat.shift();
   }
 
+  // A message element also holds its hover actions: icon names ("keep") and
+  // tooltips ("Pin message"). Only text outside those is the message.
+  const NOT_MESSAGE = 'i, button, [role="button"], [role="tooltip"]';
+  function messageText(el) {
+    const parts = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!node.parentElement.closest(NOT_MESSAGE)) parts.push(node.data);
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  }
+
   // Chat panel messages (in the DOM once the panel has been opened).
   function scanChat() {
     if (!CONFIG.showChat) return;
     for (const el of MEET.chatMessages()) {
       const id = 'm:' + el.getAttribute('data-message-id');
       if (seenChat.has(id)) continue;
-      const text = (el.innerText || el.textContent || '').trim();
+      const text = messageText(el);
       if (!text) continue;
       const sender = el.closest('[data-sender-name]')?.getAttribute('data-sender-name') || '';
       pushChat(id, sender, text, true);
@@ -312,7 +325,9 @@
     if (node.nodeType !== 1) return [];
     const out = [];
     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) out.push(walker.currentNode.data.trim());
+    while (walker.nextNode()) {
+      if (!walker.currentNode.parentElement.closest(NOT_MESSAGE)) out.push(walker.currentNode.data.trim());
+    }
     return out;
   }
 
