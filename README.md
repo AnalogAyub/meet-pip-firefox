@@ -22,7 +22,8 @@ Firefox's built-in PiP show that video.
 - Not presenting: a grid of equal, centre-cropped 4:5 tiles, 720 px wide. The
   window's shape follows the number of tiles. Past 6
   participants the last tile reads "+N more".
-- New chat messages show for 6 seconds, one line each; a long one scrolls.
+- New chat messages show for 10 seconds, one line each. The sender stays in
+  place and a long message scrolls past twice.
   Reactions float up over the video.
 - Each participant tile has a mic badge showing whether they are muted.
 - Whoever spoke last always has a tile, with their name on it and an outline

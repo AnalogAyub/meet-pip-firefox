@@ -21,7 +21,7 @@
     showSelf: false,        // include your own (mirrored) camera tile
     showChat: true,
     chatLines: 4,           // most recent messages kept on screen
-    chatTtlMs: 6000,        // how long a chat row stays up; longer if it has to scroll
+    chatTtlMs: 10000,       // how long a chat row stays up; longer if a long message needs it to scroll twice
     showTileMic: true,      // mic badge on each participant tile
     showAnnouncements: true, // also show Meet's screen-reader announcements (chat toasts, raised hands)
     showReactions: true,
@@ -397,8 +397,9 @@
     if (key !== chatCacheKey) { chatCacheKey = key; chatCache = computeChatLayout(); }
     return chatCache;
   }
-  // One line per message. A row wider than the window scrolls sideways, and
-  // stays up long enough to be read to the end.
+  // One line per message: the sender stays put and a message too wide for
+  // the rest of the row scrolls past twice. A long message gets longer loops.
+  const CHAT_LOOPS = 2;
   function computeChatLayout() {
     if (!CONFIG.showChat) return { rows: [], height: 0 };
     const now = Date.now();
@@ -406,12 +407,15 @@
     const rows = [];
     for (const m of chat) {
       ctx.font = `700 ${CHAT_FONT}px ${FONT}`;
-      const senderW = m.sender ? ctx.measureText(m.sender + ': ').width : 0;
+      // The sender never takes more than 40% of the row.
+      let sender = m.sender ? m.sender + ':' : '';
+      while (sender.length > 4 && ctx.measureText(sender).width > avail * 0.4) sender = sender.slice(0, -3).trimEnd() + '…:';
+      const senderW = sender ? ctx.measureText(sender + ' ').width : 0;
       ctx.font = `500 ${CHAT_FONT}px ${FONT}`;
-      const overflow = Math.max(0, senderW + ctx.measureText(m.text).width - avail);
-      const scrollMs = overflow / u(150) * 1000;
-      const ttl = Math.min(25000, CONFIG.chatTtlMs + scrollMs);
-      if (now - m.t < ttl) rows.push({ m, senderW, overflow, scrollMs: ttl - CONFIG.chatTtlMs });
+      const overflow = Math.max(0, ctx.measureText(m.text).width - (avail - senderW));
+      const loopMs = Math.max(CONFIG.chatTtlMs / CHAT_LOOPS, 2000 + overflow / u(170) * 1000);
+      const ttl = overflow ? Math.min(30000, loopMs * CHAT_LOOPS) : CONFIG.chatTtlMs;
+      if (now - m.t < ttl) rows.push({ m, sender, senderW, overflow, loopMs: ttl / CHAT_LOOPS });
     }
     rows.splice(0, Math.max(0, rows.length - CONFIG.chatLines));
     return { rows, height: rows.length ? rows.length * (CHAT_LH + CHAT_PAD + u(8)) + u(4) : 0 };
@@ -423,27 +427,29 @@
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     for (const row of layout.rows) {
+      const left = u(12) + CHAT_PAD, ly = y + h / 2;
       ctx.fillStyle = '#2b2c2f';
       ctx.beginPath();
       ctx.roundRect(u(12), y, W - u(24), h, u(14));
       ctx.fill();
-      // Hold for 2s, scroll to the end, hold again.
-      const progress = row.scrollMs ? Math.max(0, Math.min(1, (now - row.m.t - 2000) / row.scrollMs)) : 0;
-      let x = u(12) + CHAT_PAD - row.overflow * progress;
-      const ly = y + h / 2;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(u(12) + CHAT_PAD, y, W - u(24) - CHAT_PAD * 2, h);
-      ctx.clip();
-      if (row.m.sender) {
+      if (row.sender) {
         ctx.font = `700 ${CHAT_FONT}px ${FONT}`;
         ctx.fillStyle = '#8ab4f8';
-        ctx.fillText(row.m.sender + ':', x, ly);
-        x += row.senderW;
+        ctx.fillText(row.sender, left, ly);
       }
+      // Each loop: hold 1s, scroll to the end, hold 1s.
+      let shift = 0;
+      if (row.overflow) {
+        const inLoop = (now - row.m.t) % row.loopMs;
+        shift = row.overflow * Math.max(0, Math.min(1, (inLoop - 1000) / (row.loopMs - 2000)));
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(left + row.senderW, y, W - u(24) - CHAT_PAD * 2 - row.senderW, h);
+      ctx.clip();
       ctx.font = `500 ${CHAT_FONT}px ${FONT}`;
       ctx.fillStyle = '#e8eaed';
-      ctx.fillText(row.m.text, x, ly);
+      ctx.fillText(row.m.text, left + row.senderW - shift, ly);
       ctx.restore();
       y += h + u(8);
     }
