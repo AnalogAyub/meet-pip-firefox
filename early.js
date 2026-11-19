@@ -14,7 +14,8 @@
       early.onPip?.(type === 'enterpictureinpicture');
     }, true);
   }
-  window.addEventListener('visibilitychange', e => e.stopImmediatePropagation(), true);
+  // visibilitychange itself is left alone: Firefox's own open-PiP-on-tab-switch
+  // listens for it.
 
   // Firefox only: what the page's own scripts read.
   const page = document.wrappedJSObject;

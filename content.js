@@ -73,35 +73,36 @@
     const now = performance.now();
     const cached = tileCache.get(video);
     if (cached && now - cached.t < 2000) return cached;
-    let self = false, presentation = false;
+    let self = false;
     try {
       const cs = getComputedStyle(video);
       // Only your own preview is mirrored.
       if (cs.transform && cs.transform !== 'none' && new DOMMatrix(cs.transform).a < 0) self = true;
-      // A shared screen uses contain, but so does a camera set to "fit to
-      // frame", so also require a size or shape a camera doesn't send.
-      const ar = video.videoWidth / video.videoHeight;
-      const cameraShaped = [16 / 9, 4 / 3, 9 / 16, 3 / 4, 1].some(a => Math.abs(ar - a) < 0.03);
-      if (cs.objectFit === 'contain' && (!cameraShaped || video.videoHeight > 720)) presentation = true;
     } catch (e) { /* ignore */ }
+    // Only a shared screen's tile has zoom and pop-out buttons. The text check
+    // covers Meet renaming those icons.
     const tile = video.closest('[data-participant-id]');
-    if (!presentation && tile && /presentation|presenting|präsentation|présentation|presentación/i.test(tile.textContent || '')) {
-      presentation = true;
-    }
+    const icons = tileIcons(tile);
+    const presentation = icons.has('zoom_in') || icons.has('open_in_new') ||
+      /presentation|presenting|präsentation|présentation|presentación/i.test(tile?.textContent || '');
     const info = { t: now, self, presentation: presentation && !self };
     tileCache.set(video, info);
     return info;
   }
 
-  // Meet marks a muted participant with a mic_off icon on the tile. The
-  // "mute for everyone" button has the same icon, so skip icons in buttons.
-  function tileMuted(video) {
-    const tile = video.closest('[data-participant-id]');
-    if (!tile) return false;
-    for (const icon of tile.querySelectorAll('i')) {
-      if (icon.textContent.trim() === 'mic_off' && !icon.closest('button, [role="button"]')) return true;
-    }
-    return false;
+  // Meet's icons are ligatures: <i>mic_off</i>.
+  function tileIcons(tile) {
+    const names = new Set();
+    if (tile) for (const icon of tile.querySelectorAll('i')) names.add(icon.textContent.trim());
+    return names;
+  }
+  // Each tile has a "mute this person" button whose icon is mic_none while
+  // they are unmuted and mic_off once they are muted. null: can't tell.
+  function tileMuted(tile) {
+    const icons = tileIcons(tile);
+    if (icons.has('mic_off')) return true;
+    if (icons.has('mic_none') || icons.has('mic')) return false;
+    return null;
   }
 
   // Tiles to draw, largest first. Needs layout, so sync() rebuilds it twice a
@@ -109,7 +110,7 @@
   let sources = [];
   let othersCount = 0;   // participant tiles other than yours, with or without video
   function refreshSources() {
-    const out = [];
+    const byTile = new Map();
     for (const v of document.querySelectorAll('video')) {
       if (v === mirror) continue;
       // Keep Firefox from picking Meet's own tiles for PiP.
@@ -120,10 +121,13 @@
       if (r.width < 2 || r.height < 2) continue;
       const info = tileInfo(v);
       if (info.self && !CONFIG.showSelf) continue;
-      out.push({ video: v, area: r.width * r.height, presentation: info.presentation, muted: !info.presentation && tileMuted(v) });
+      const tile = v.closest('[data-participant-id]');
+      const entry = { video: v, area: r.width * r.height, presentation: info.presentation, muted: info.presentation ? null : tileMuted(tile) };
+      // A tile can hold two videos of the same person; keep the larger.
+      const key = tile || v;
+      if (!byTile.has(key) || byTile.get(key).area < entry.area) byTile.set(key, entry);
     }
-    out.sort((a, b) => b.area - a.area);
-    sources = out;
+    sources = [...byTile.values()].sort((a, b) => b.area - a.area);
     othersCount = Math.max(0, MEET.tiles().length - 1);
   }
   // Per frame: cheap liveness checks only.
@@ -139,19 +143,28 @@
   // Announcements about Meet's own UI, not from people.
   const ANNOUNCE_NOISE = /microphone|camera|\bpin|unpin|\bmute|captions|recording|press |shortcut|keyboard|loading|presentation|presenting|main screen|\bscreen\b|\btile|layout|spotlight|connect|network|quality|picture-in-picture|^\d+ results?\b|no results|^you reacted|panel (is )?(now )?(open|closed)|side panel|\b(joined|left)( the (call|meeting))?\.?$|transcri|taking notes/i;
 
-  function pushChat(key, sender, text) {
+  // Meet reports one message several ways (the chat panel, a toast, a
+  // screen-reader line) and repeats them, so anything matching a row from the
+  // last two minutes is the same message. Only two chat-panel messages, which
+  // have their own ids, can repeat a text.
+  function sameText(a, b) {
+    if (a === b) return true;
+    const [short, long] = a.length < b.length ? [a, b] : [b, a];
+    return short.length >= 12 && long.includes(short);
+  }
+  function pushChat(key, sender, text, fromPanel = false) {
     if (seenChat.has(key)) return;
     seenChat.add(key);
     if (seenChat.size > 500) seenChat.clear();
-    text = text.replace(/\s+/g, ' ').slice(0, 240);
-    // The chat panel and the announcement both carry a new message.
+    text = text.replace(/\s+/g, ' ').trim().slice(0, 240);
+    if (!text) return;
     const now = Date.now();
-    const same = chat.find(m => m.text === text && now - m.t < 15000);
+    const same = chat.find(m => now - m.t < 120000 && !(fromPanel && m.fromPanel) && sameText(m.text, text));
     if (same) {
       if (sender && !same.sender) { same.sender = sender; chatVersion++; }
       return;
     }
-    chat.push({ sender, text, t: now });
+    chat.push({ sender, text, t: now, fromPanel });
     chatVersion++;
     if (chat.length > 30) chat.shift();
   }
@@ -165,7 +178,7 @@
       const text = (el.innerText || el.textContent || '').trim();
       if (!text) continue;
       const sender = el.closest('[data-sender-name]')?.getAttribute('data-sender-name') || '';
-      pushChat(id, sender, text);
+      pushChat(id, sender, text, true);
     }
   }
 
@@ -212,18 +225,25 @@
   // Collect a region's pieces for a moment and show them as one row.
   const TIME_RE = /^\d{1,2}[:.]\d{2}(\s?[ap]\.?m\.?)?$/i;
   const liveParts = new Map();
+  const SAYS_RE = /^(.{1,60}?) says(?: in chat)?: (.+)$/i;
   function queueLive(region, text) {
     let parts = liveParts.get(region);
     if (!parts) {
       liveParts.set(region, parts = []);
       setTimeout(() => {
         liveParts.delete(region);
-        const sender = parts.length > 1 && parts[0].length <= 40 ? parts.shift() : '';
-        const body = parts.join(' ');
-        pushChat('a:' + sender + body + ':' + Math.floor(Date.now() / 10000), sender, body);
+        // "Name says in chat: text" is complete by itself; the other pieces
+        // are usually the same name and text again.
+        const said = parts.map(p => p.match(SAYS_RE)).filter(Boolean);
+        for (const [, sender, body] of said) pushChat('a:' + sender + body, sender, body);
+        const rest = parts.filter(p => !SAYS_RE.test(p) && !said.some(([, sender, body]) => p === sender || body.includes(p)));
+        if (!rest.length) return;
+        const sender = rest.length > 1 && rest[0].length <= 40 ? rest.shift() : '';
+        const body = rest.join(' ');
+        pushChat('a:' + sender + body, sender, body);
       }, 250);
     }
-    if (!TIME_RE.test(text) && parts[parts.length - 1] !== text) parts.push(text);
+    if (!TIME_RE.test(text) && !parts.includes(text)) parts.push(text);
   }
   function textPieces(node) {
     if (node.nodeType === 3) return [node.data.trim()];
@@ -409,7 +429,7 @@
   // Mic badge in a tile's top-right corner.
   function drawTile(entry, x, y, w, h) {
     drawCover(entry.video, x, y, w, h);
-    if (!CONFIG.showTileMic) return;
+    if (!CONFIG.showTileMic || entry.muted === null) return;
     const d = Math.max(u(34), Math.min(u(52), w * 0.2)), m = d * 0.22;
     statusBlock(x + w - d - m, y + m, d, d, !entry.muted, entry.muted ? 'micOff' : 'micOn');
   }
