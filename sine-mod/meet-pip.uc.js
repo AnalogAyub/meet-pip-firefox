@@ -221,7 +221,8 @@
       try { mm.removeMessageListener("MeetPip:State", onState); } catch (e) { /* tab gone */ }
     }, { once: true });
 
-    document.head.append(el("link", { rel: "stylesheet", href: `chrome://sine/content/${folder}/player.css` }));
+    // The query keeps Firefox from reusing a cached copy after the mod is updated.
+    document.head.append(el("link", { rel: "stylesheet", href: `chrome://sine/content/${folder}/player.css?${Date.now()}` }));
     document.documentElement.setAttribute("meetpip", "");
     document.body.append(bar);
     send({ cmd: "hello" });
