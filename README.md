@@ -2,7 +2,9 @@
 
 Picture-in-picture for Google Meet in Firefox and Firefox-based browsers (Zen).
 Shows the presentation, participant video, chat, reactions and your mic/camera
-state in an always-on-top window, and opens when you leave the tab.
+state in an always-on-top window, and opens when you leave the tab. An optional
+mod for Zen adds mic, camera, reaction, chat and end-call buttons to that
+window.
 
 | Presenting | Not presenting |
 | --- | --- |
@@ -33,8 +35,9 @@ Firefox's built-in PiP show that video.
   while they talk, even with their camera off.
 - Meet is not told that PiP is open or that its tab is hidden, so it keeps the
   layout you left.
-- The PiP window's mute button toggles Meet's microphone.
-- The PiP window's pause button turns Meet's camera off.
+- The PiP window's mute button toggles Meet's microphone, and its pause
+  button turns Meet's camera off. The [Sine mod](#sine-mod-optional) replaces
+  both with a fuller set of controls.
 
 A button in Meet's bottom bar, left of the controls, opens and closes the PiP
 window.
@@ -46,29 +49,45 @@ Download `meet-pip.xpi` from the
 and open it in Firefox or Zen. It is signed by Mozilla, so no settings need
 changing.
 
-To run from source, load `manifest.json` from `about:debugging` → This Firefox
-→ Load Temporary Add-on, or:
+## Sine mod (optional)
 
-```bash
-npx web-ext run --source-dir . --firefox "/Applications/Zen Browser.app/Contents/MacOS/zen"
-```
+<img src="screenshots/sine-mod.png" width="300" alt="The PiP window with the Sine mod: a row of six reactions and a plus, then mic, camera, a message box and a red end-call button, over a grid of participant tiles">
 
-## Zen mod (optional)
+Firefox's PiP window only has play and mute buttons. `sine-mod/` is a
+[Sine](https://github.com/CosmoCreeper/Sine) mod for Zen that replaces them,
+for Meet calls only, with a bar that appears when you hover over the window.
+Other PiP windows are left alone.
 
-`sine-mod/` is a [Sine](https://github.com/CosmoCreeper/Sine) mod for Zen that
-replaces the PiP window's play and mute controls, for Meet calls only, with a
-bar that appears on hover:
+| Control | What it does |
+| --- | --- |
+| Mic | Mutes and unmutes. Turns pink when muted. |
+| Camera | Turns the camera off and on. Turns pink when off. |
+| 💖 👍 🎉 👏 😂 😮 | Sends that reaction. |
+| ＋ | Opens the macOS emoji picker; whatever you pick is sent as a reaction. An emoji outside Meet's quick set is found in Meet's own picker. |
+| Message everyone | Sends a chat message on Enter. Opens Meet's chat panel if it has to, and closes it again. |
+| End call | Leaves the call and closes the Meet tab. One click, no confirmation. |
 
-- mic and camera buttons that show the current state. Turning the camera on
-  shows the Meet tab for a moment, because Firefox only grants the camera to
-  the selected tab
-- six quick reactions, and a + that opens the macOS emoji picker for any other
-- a chat box (Enter sends)
-- end call, which leaves the call and closes the tab
+With the mod, the extension also matches its tile corners to the PiP window's.
 
-It needs the extension, which carries out the commands in the Meet tab. Install
-it in the profile you take calls in: Sine settings, add mod from repository,
-`AnalogAyub/meet-pip-firefox/tree/main/sine-mod`.
+Turning the camera on needs a detour. Firefox applies a saved camera permission
+only while the Meet tab is selected and its window is the active one, which is
+never the case while you are clicking in the PiP. So the mod brings the Meet
+tab forward, waits for the grant, and returns to the tab you were on. It takes
+a fraction of a second.
+
+### Installing it
+
+1. Install [Sine](https://github.com/CosmoCreeper/Sine) in the profile you
+   take calls in.
+2. Set `sine.allow-unsafe-js` to `true` in `about:config`. Sine will not run a
+   mod's JavaScript without it.
+3. In Sine's settings, add a mod from a repository:
+   `AnalogAyub/meet-pip-firefox/tree/main/sine-mod`.
+4. Install the extension in the same profile. The mod only draws the buttons;
+   the extension carries out what they ask in the Meet tab.
+
+The ＋ button's picker is macOS only. Finding the chat box, and the reaction
+bar when it is closed, relies on Meet's English labels.
 
 ## Settings
 
@@ -88,16 +107,23 @@ Extension options are in the `CONFIG` object at the top of `content.js`.
   `tileInfo()`, `scanChat()` and the `MutationObserver` in `content.js`.
 - Chat is read from the chat panel once it has been opened, and from Meet's
   `aria-live` announcements otherwise.
-- The camera can be turned off from PiP but not on. Firefox withholds camera
-  grants from tabs that are not selected.
+- Without the Sine mod, the camera can be turned off from PiP but not on.
+  Firefox withholds camera grants from tabs that are not selected.
 - Firefox does not tell a page when PiP is opened with ⌘⇧] or the hover
   toggle. A PiP opened that way updates at 3 fps while the Meet tab has focus.
-- No participant names or active-speaker highlight.
+- Only the last speaker's tile shows a name.
+- Who is speaking, and who is muted, are read from Meet's tile markup: class
+  changes on the voice indicator, and the icon on each tile's mute button.
 
 ## Testing
 
-`test/mock-meet.html` fakes a call. Serve the repo root and open it; add
-`?present` for a screenshare, `?n=9` for more participants.
+Serve the repo root and open:
+
+- `test/mock-meet.html`, a fake call. `?present` adds a screenshare, `?n=9`
+  more participants, `?speaker=2` someone talking, `?hand` the raise-hand
+  gesture. `window.sim()` in the console sends chat and reactions.
+- `test/mock-pip.html`, a stand-in for the PiP window with the Sine mod's bar
+  over that fake call, for checking the bar's styling without Zen.
 
 ## License
 

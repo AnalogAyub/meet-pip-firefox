@@ -403,7 +403,7 @@
     H = canvas.height = h;
   }
 
-  // Corner radius for tiles. The Zen mod reports the PiP window's width; with
+  // Corner radius for tiles. The Sine mod reports the PiP window's width; with
   // it, tiles follow the window's own rounded corners (an inner corner is the
   // outer one less the gap between them). Without it, a fixed radius.
   let pipWidth = 0;
@@ -888,7 +888,7 @@
   }
   dock.addEventListener('click', togglePip);
 
-  // Commands from the companion Zen mod, which adds real buttons to the PiP
+  // Commands from the companion Sine mod, which adds real buttons to the PiP
   // window. They arrive as `meet-pip-command` events carrying JSON; mic and
   // camera state goes back as `meet-pip-state`. Without the mod nothing sends
   // or listens.
