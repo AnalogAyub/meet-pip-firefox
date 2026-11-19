@@ -17,7 +17,7 @@ video tiles onto a canvas, streams the canvas into one `<video>`, and lets
 Firefox's built-in PiP show that video.
 
 - Presenting: the shared screen at full width, with participant tiles and
-  mic/camera indicators in a row under it. 1280 px wide; height follows the
+  your own tile in a row under it. 1280 px wide; height follows the
   slide's aspect ratio.
 - Not presenting: a grid of equal, centre-cropped 4:5 tiles, 720 px wide. The
   window's shape follows the number of tiles. Past 6
@@ -25,7 +25,8 @@ Firefox's built-in PiP show that video.
 - New chat messages show for 10 seconds, one line each. The sender stays in
   place and a long message scrolls past twice.
   Reactions float up over the video.
-- Each participant tile has a mic badge showing whether they are muted.
+- Each participant tile has a mic badge showing whether they are muted. Your
+  own tile is always last, with your mic and camera state on it.
 - Whoever spoke last always has a tile, with their name on it and an outline
   while they talk, even with their camera off.
 - Meet is not told that PiP is open or that its tab is hidden, so it keeps the
@@ -56,8 +57,10 @@ npx web-ext run --source-dir . --firefox "/Applications/Zen Browser.app/Contents
 replaces the PiP window's play and mute controls, for Meet calls only, with a
 bar that appears on hover:
 
-- mic and camera buttons that show the current state
-- six quick reactions
+- mic and camera buttons that show the current state. Turning the camera on
+  shows the Meet tab for a second, because Firefox only grants the camera to
+  the selected tab
+- six quick reactions, and a + for any other emoji
 - a chat box (Enter sends)
 - end call, which leaves the call and closes the tab
 

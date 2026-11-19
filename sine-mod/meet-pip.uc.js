@@ -107,7 +107,25 @@
     };
 
     const mic = button({ title: "Microphone" }, icon("micOn"), () => send({ cmd: "mic" }));
-    const cam = button({ title: "Camera" }, icon("camOn"), () => send({ cmd: "cam" }));
+    // Firefox holds a camera request from a tab that is not selected until it
+    // is. So to turn the camera on, show the Meet tab for a moment and then go
+    // back to the tab that was open. Turning it off needs none of this.
+    let camOn = null;
+    const cam = button({ title: "Camera" }, icon("camOn"), () => {
+      send({ cmd: "cam" });
+      if (camOn !== false) return;
+      const win = browser.ownerGlobal;
+      const tabs = win?.gBrowser;
+      const meetTab = tabs?.getTabForBrowser(browser);
+      const previous = tabs?.selectedTab;
+      if (!meetTab || previous === meetTab) return;
+      win.setTimeout(() => {
+        tabs.selectedTab = meetTab;
+        win.setTimeout(() => {
+          if (tabs.selectedTab === meetTab && previous.isConnected) tabs.selectedTab = previous;
+        }, 1200);
+      }, 200);
+    });
     const chat = el("input", { type: "text", placeholder: "Message everyone", maxlength: "500" });
     const end = button({ class: "end", title: "Leave call and close the tab" }, icon("end"), () => {
       send({ cmd: "leave" });
@@ -118,25 +136,42 @@
         if (tab) gBrowser.removeTab(tab);
       }, 700);
     });
+    // Any other emoji: "+" shows a small box to type or paste one into
+    // (Ctrl+Cmd+Space opens the macOS emoji picker).
+    const custom = el("input", { type: "text", class: "emoji", placeholder: "🙂", maxlength: "16", hidden: "" });
+    const more = button({ class: "react", title: "Another emoji" }, "＋", () => {
+      custom.hidden = !custom.hidden;
+      if (!custom.hidden) custom.focus();
+    });
     const bar = el("div", { id: "meetpip-bar" },
       el("div", { class: "row reactions" },
-        ...REACTIONS.map(emoji => button({ class: "react", title: emoji }, emoji, () => send({ cmd: "react", emoji })))),
+        ...REACTIONS.map(emoji => button({ class: "react", title: emoji }, emoji, () => send({ cmd: "react", emoji }))),
+        more, custom),
       el("div", { class: "row" }, mic, cam, chat, end));
 
     // The player treats key presses as playback shortcuts (space would switch
-    // the camera off), so keep typing to the chat box.
-    for (const type of ["keydown", "keyup", "keypress"]) {
-      chat.addEventListener(type, e => {
-        e.stopPropagation();
-        if (type !== "keydown") return;
-        if (e.key === "Enter" && chat.value.trim()) {
-          send({ cmd: "chat", text: chat.value });
-          chat.value = "";
-        } else if (e.key === "Escape") {
-          chat.blur();
-        }
-      });
-    }
+    // the camera off), so keep typing to the text boxes.
+    const onEnter = (input, submit) => {
+      for (const type of ["keydown", "keyup", "keypress"]) {
+        input.addEventListener(type, e => {
+          e.stopPropagation();
+          if (type !== "keydown") return;
+          if (e.key === "Enter" && input.value.trim()) {
+            submit(input.value.trim());
+            input.value = "";
+          } else if (e.key === "Escape") {
+            input.blur();
+          }
+        });
+      }
+    };
+    onEnter(chat, text => send({ cmd: "chat", text }));
+    onEnter(custom, text => {
+      // First emoji only, whole (flags and skin tones are several code points).
+      const first = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)][0]?.segment;
+      if (first) send({ cmd: "react", emoji: first });
+      custom.hidden = true;
+    });
 
     const setIcon = (btn, name, off) => {
       btn.replaceChildren(icon(name));
@@ -147,6 +182,7 @@
       try { state = JSON.parse(json); } catch (e) { return; }
       setIcon(mic, state.mic ? "micOn" : "micOff", !state.mic);
       setIcon(cam, state.cam ? "camOn" : "camOff", !state.cam);
+      camOn = !!state.cam;
     };
     function onFrameState(m) { showState(m.data); }
     const observer = {

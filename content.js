@@ -16,9 +16,8 @@
     presentWidth: 1280,     // composite width while presenting; height follows the slide's aspect ratio
     fps: 24,                // while someone can see the composite
     idleFps: 3,             // while you are looking at Meet itself and the preview is closed
-    maxGridTiles: 6,        // participants shown when nobody is presenting
-    maxStripTiles: 5,       // participants shown beside the status blocks while presenting
-    showSelf: false,        // include your own (mirrored) camera tile
+    maxGridTiles: 6,        // tiles shown when nobody is presenting, yours included
+    maxStripTiles: 5,       // tiles shown under a presentation, yours included
     showChat: true,
     chatLines: 4,           // most recent messages kept on screen
     chatTtlMs: 10000,       // how long a chat row stays up; longer if a long message needs it to scroll twice
@@ -165,9 +164,12 @@
   // Tiles to draw, largest first. Needs layout, so sync() rebuilds it twice a
   // second instead of every frame.
   let sources = [];
+  // Your own tile: always drawn, with your mic and camera state on it.
+  const self = { self: true, video: null };
   let othersCount = 0;   // participant tiles other than yours, with or without video
   function refreshSources() {
     const byTile = new Map();
+    let selfVideo = null;
     for (const v of document.querySelectorAll('video')) {
       if (v === mirror) continue;
       // Keep Firefox from picking Meet's own tiles for PiP.
@@ -177,7 +179,7 @@
       const r = v.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
       const info = tileInfo(v);
-      if (info.self && !CONFIG.showSelf) continue;
+      if (info.self) { if (!selfVideo) selfVideo = v; continue; }
       const tile = v.closest('[data-participant-id]');
       const entry = { video: v, tile, area: r.width * r.height, presentation: info.presentation, muted: info.presentation ? null : tileMuted(tile), name: tileName(tile) };
       // A tile can hold two videos of the same person; keep the larger.
@@ -190,6 +192,7 @@
       byTile.set(sp, { video: null, tile: sp, area: 0, presentation: false, muted: tileMuted(sp), name: tileName(sp) });
     }
     sources = [...byTile.values()].sort((a, b) => b.area - a.area);
+    self.video = selfVideo;
     othersCount = Math.max(0, watchTiles() - 1);
   }
   // Per frame: cheap liveness checks only.
@@ -400,9 +403,9 @@
 
   const state = { micOff: false, camOff: false, inCall: false };
 
-  let CHAT_FONT, CHAT_LH, CHAT_PAD, STATUS_H;
+  let CHAT_FONT, CHAT_LH, CHAT_PAD;
   function applyUnit() {
-    CHAT_FONT = u(27); CHAT_LH = u(36); CHAT_PAD = u(14); STATUS_H = u(96);
+    CHAT_FONT = u(27); CHAT_LH = u(36); CHAT_PAD = u(14);
   }
   applyUnit();
   // Recompute only when the chat, width or second (for expiry) changes.
@@ -511,6 +514,7 @@
   }
   // Mic badge in a tile's top-right corner.
   function drawTile(entry, x, y, w, h) {
+    if (entry.self) { drawSelf(x, y, w, h); return; }
     const isSpeaker = entry.tile && entry.tile === speaker.tile;
     if (entry.video) {
       drawCover(entry.video, x, y, w, h);
@@ -560,15 +564,34 @@
       ctx.stroke();
     }
     if (!CONFIG.showTileMic || entry.muted === null) return;
-    const d = Math.max(u(34), Math.min(u(52), w * 0.2)), m = d * 0.22;
+    const d = badgeSize(w), m = d * 0.22;
     statusBlock(x + w - d - m, y + m, d, d, !entry.muted, entry.muted ? 'micOff' : 'micOn');
   }
-
-  // Two blocks of (bw, bh), right edge at `right`, vertically centred on `cy`.
-  function drawStatus(right, cy, bw, bh) {
-    const gap = u(10);
-    statusBlock(right - bw * 2 - gap, cy - bh / 2, bw, bh, !state.micOff, state.micOff ? 'micOff' : 'micOn');
-    statusBlock(right - bw, cy - bh / 2, bw, bh, !state.camOff, state.camOff ? 'camOff' : 'camOn');
+  const badgeSize = w => Math.max(u(34), Math.min(u(52), w * 0.2));
+  // Your preview, mirrored as Meet shows it, with mic and camera badges.
+  function drawSelf(x, y, w, h) {
+    const v = self.video;
+    if (v && v.isConnected && v.readyState >= 2 && v.videoWidth && !v.paused && !state.camOff) {
+      ctx.save();
+      ctx.translate(2 * x + w, 0);
+      ctx.scale(-1, 1);
+      drawCover(v, x, y, w, h);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#2b2c2f';
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, u(14));
+      ctx.fill();
+      ctx.fillStyle = '#9aa0a6';
+      ctx.font = `500 ${Math.max(u(20), Math.min(u(30), w * 0.11))}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('You', x + w / 2, y + h / 2);
+      ctx.textAlign = 'left';
+    }
+    const d = badgeSize(w), m = d * 0.22;
+    statusBlock(x + w - d - m, y + m, d, d, !state.micOff, state.micOff ? 'micOff' : 'micOn');
+    statusBlock(x + w - d * 2 - m * 1.6, y + m, d, d, !state.camOff, state.camOff ? 'camOff' : 'camOn');
   }
 
   function drawMessage(message, areaH) {
@@ -581,9 +604,9 @@
   }
 
   const gridCols = n => n <= 1 ? 1 : n <= 4 ? 2 : 3;
-  // Grid of equal centre-cropped cells. `more` > 0 adds a "+N more" cell.
-  function drawGrid(entries, top, areaH, more) {
-    const n = entries.length + (more ? 1 : 0);
+  // Grid of equal centre-cropped cells. A cell is a tile entry or { more: N }.
+  function drawGrid(cells, top, areaH) {
+    const n = cells.length;
     const cols = gridCols(n);
     const gap = u(8);
     const rows = Math.ceil(n / cols);
@@ -591,12 +614,12 @@
     const ch = Math.min((areaH - gap * (rows - 1)) / rows, cw * 16 / 9);
     const blockH = rows * ch + (rows - 1) * gap;
     const y0 = top + (areaH - blockH) / 2;
-    for (let i = 0; i < n; i++) {
+    cells.forEach((cell, i) => {
       const c = i % cols, r = Math.floor(i / cols);
       const inRow = r === rows - 1 ? n - r * cols : cols;
       const rowW = inRow * cw + (inRow - 1) * gap;
       const x = (W - rowW) / 2 + c * (cw + gap), y = y0 + r * (ch + gap);
-      if (i < entries.length) { drawTile(entries[i], x, y, cw, ch); continue; }
+      if (!cell.more) { drawTile(cell, x, y, cw, ch); return; }
       ctx.fillStyle = '#2b2c2f';
       ctx.beginPath();
       ctx.roundRect(x, y, cw, ch, u(18));
@@ -605,13 +628,13 @@
       ctx.font = `500 ${u(44)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`+${more} more`, x + cw / 2, y + ch / 2);
+      ctx.fillText(`+${cell.more} more`, x + cw / 2, y + ch / 2);
       ctx.textAlign = 'left';
-    }
+    });
   }
 
   // Presenting: slide at full width and its own aspect ratio, chat under it,
-  // then one row with tiles (left) and mic/camera indicators (right).
+  // then one row with the others' tiles (left) and yours (right).
   function composePresenting(stage, rest) {
     const v = stage.video;
     const aspect = Math.max(0.6, Math.min(2.4, v.videoWidth / v.videoHeight));
@@ -631,12 +654,10 @@
     if (chatLayout.height) drawChat(chatLayout, presH);
 
     const rowY = H - rowH - gap;
-    const sb = u(104);
-    drawStatus(W - gap * 2, rowY + rowH / 2, sb, sb);
-    // Square tiles, left-aligned, narrower if they would reach the indicators.
-    const avail = W - gap * 5 - sb * 2 - u(10);
-    const tw = Math.min(rowH, Math.floor(avail / Math.max(1, rest.length)) - gap);
+    // Square tiles, narrower if they would not all fit.
+    const tw = Math.min(rowH, Math.floor((W - gap) / (rest.length + 1)) - gap);
     rest.forEach((entry, i) => drawTile(entry, gap + i * (tw + gap), rowY, tw, rowH));
+    drawTile(self, W - gap - tw, rowY, tw, rowH);
   }
 
   function compose() {
@@ -651,7 +672,7 @@
     const videos = sourceVideos();
     const stageIdx = videos.findIndex(v => v.presentation);
     if (stageIdx >= 0) {
-      composePresenting(videos[stageIdx], withSpeaker(videos.filter((_, i) => i !== stageIdx), CONFIG.maxStripTiles));
+      composePresenting(videos[stageIdx], withSpeaker(videos.filter((_, i) => i !== stageIdx), CONFIG.maxStripTiles - 1));
       return;
     }
 
@@ -659,23 +680,22 @@
     const w = CONFIG.width;
     setSize(w, H, w / 720);
     const chatLayout = layoutChat();
-    const over = videos.length > CONFIG.maxGridTiles;
-    const shown = over ? withSpeaker(videos, CONFIG.maxGridTiles - 1) : videos;
-    const n = shown.length + (over ? 1 : 0);
-    const cols = gridCols(n), rows = Math.ceil(n / cols), gap = u(8);
+    // Others first, then "+N more" if they don't all fit, then you.
+    const room = CONFIG.maxGridTiles - 1;
+    const over = videos.length > room;
+    const shown = over ? withSpeaker(videos, room - 1) : videos;
+    const cells = [...shown];
+    if (over) cells.push({ more: Math.max(videos.length, othersCount) - shown.length });
+    cells.push(self);
+    const cols = gridCols(cells.length), rows = Math.ceil(cells.length / cols), gap = u(8);
     const cellH = (w - gap * (cols + 1)) / cols * 1.25;
-    const areaH = n ? gap + rows * cellH + (rows - 1) * gap : u(400);   // space for video
-    setSize(w, areaH + chatLayout.height + STATUS_H, w / 720);
+    const areaH = gap + rows * cellH + (rows - 1) * gap;   // space for video
+    setSize(w, areaH + chatLayout.height + gap, w / 720);
     ctx.fillStyle = '#131314';
     ctx.fillRect(0, 0, W, H);
-    if (!n) {
-      drawMessage('No video right now', areaH);
-    } else {
-      drawGrid(shown, gap, areaH - gap, over ? Math.max(videos.length, othersCount) - shown.length : 0);
-    }
+    drawGrid(cells, gap, areaH - gap);
     if (CONFIG.showReactions && reactions.length) drawReactions(areaH);
     if (chatLayout.height) drawChat(chatLayout, areaH);
-    drawStatus(W - u(12), H - STATUS_H / 2, u(120), u(76));
   }
 
   // Docked button
@@ -803,14 +823,23 @@
       setTimeout(sync, 150);
     },
     async react({ emoji }) {
-      if (typeof emoji !== 'string' || emoji.length > 12 || !EMOJI_RE.test(emoji)) return;
-      const find = () => [...document.querySelectorAll('button')].find(b =>
-        outsideTiles(b) && (b.getAttribute('aria-label') === emoji || b.querySelector('img')?.alt === emoji));
+      if (typeof emoji !== 'string' || emoji.length > 16 || !EMOJI_RE.test(emoji)) return;
+      const find = () => [...document.querySelectorAll('button, [role="button"], [role="option"], [role="gridcell"]')].find(b =>
+        outsideTiles(b) && !root.contains(b) && (b.getAttribute('aria-label') === emoji || b.dataset.emoji === emoji ||
+          b.querySelector('img')?.alt === emoji || b.textContent.trim() === emoji));
       let btn = find();
       if (!btn) {
         // The reaction bar is closed.
-        (labelButton(/^send a reaction/i) || iconButton('mood', 'add_reaction'))?.click();
+        (labelButton(/^send a reaction/i) || iconButton('mood'))?.click();
         btn = await until(find, 1500);
+      }
+      if (!btn) {
+        // Not one of the quick reactions: look in the full picker.
+        const more = labelButton(/^more emojis/i) || iconButton('add_reaction');
+        more?.click();
+        btn = await until(find, 2000);
+        // Not there either; close the picker again.
+        if (!btn) more?.click();
       }
       btn?.click();
     },

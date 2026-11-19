@@ -30,3 +30,5 @@ body:hover #meetpip-bar, #meetpip-bar:focus-within { opacity: 1; }
   border: 0; border-radius: 15px; background: rgba(60, 64, 67, 0.95); color: #e8eaed; font: inherit;
 }
 #meetpip-bar input::placeholder { color: #9aa0a6; }
+#meetpip-bar input.emoji { flex: none; width: 44px; padding: 0 6px; text-align: center; font-size: 16px; }
+#meetpip-bar input[hidden] { display: none; }
