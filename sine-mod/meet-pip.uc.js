@@ -90,19 +90,25 @@
     let camOn = null;
     const cam = button({ title: "Camera" }, icon("camOn"), () => {
       send({ cmd: "cam" });
-      if (camOn !== false) return;
+      // Each step is logged to the Browser Console, to see where it stops
+      // when the camera does not come on.
+      const log = (...a) => console.log("[meet-pip] camera:", ...a);
+      log("clicked; camera reported as", camOn === null ? "unknown" : camOn ? "on" : "off");
+      if (camOn === true) return;
       const win = browser.ownerGlobal;
       const tabs = win?.gBrowser;
       const meetTab = tabs?.getTabForBrowser(browser);
-      if (!meetTab) return;
+      if (!meetTab) { log("could not find the Meet tab"); return; }
       win.setTimeout(() => {
         const previous = tabs.selectedTab;
         if (previous !== meetTab) tabs.selectedTab = meetTab;
         win.focus();
+        log("Meet tab selected:", tabs.selectedTab === meetTab, "| Meet window active:", Services.focus.activeWindow === win);
         win.setTimeout(() => {
+          log("after 1.5s, Meet window active:", Services.focus.activeWindow === win, "| camera reported as", camOn === null ? "unknown" : camOn ? "on" : "off");
           if (previous !== meetTab && tabs.selectedTab === meetTab && previous.isConnected) tabs.selectedTab = previous;
           if (!window.closed) window.focus();
-        }, 1200);
+        }, 1500);
       }, 200);
     });
     const chat = el("input", { type: "text", placeholder: "Message everyone", maxlength: "500" });

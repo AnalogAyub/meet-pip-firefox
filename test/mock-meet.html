@@ -59,6 +59,7 @@
   <div class="pair"><button aria-label="Audio settings">^</button><button data-is-muted="false" aria-label="Turn off microphone (⌘+d)">mic</button></div>
   <div class="pair"><button aria-label="Video settings">^</button><button data-is-muted="false" aria-label="Turn off camera (⌘+e)">cam</button></div>
   <button>a</button><button>b</button><button>c</button><button>d</button>
+  <button aria-label="Send a reaction" aria-pressed="true" onclick="mockLog.push('reaction bar toggled')"><i>mood</i></button>
   <button aria-label="👍" data-emoji="👍" onclick="mockLog.push('react 👍')"><img alt="👍" data-emoji="👍"></button>
   <!-- "More emojis": a picker that only renders the row in view, like Meet's. -->
   <button aria-label="More emojis" aria-controls="picker" onclick="togglePicker()"><i>add_reaction</i></button>

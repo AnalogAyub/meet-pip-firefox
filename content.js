@@ -928,7 +928,7 @@
     hello: () => sendState(true),
     // Diagnostics: copy(document.documentElement.dataset.meetPipLog) in the console.
     debug() {
-      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.14', rows: chat, log: chatLog }, null, 1);
+      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.15', rows: chat, log: chatLog }, null, 1);
     },
     mic: () => clickMic(),
     cam() {
@@ -943,9 +943,11 @@
       const want = plain(emoji);
       const find = scope => [...scope.querySelectorAll('button[data-emoji]')].find(b => plain(b.dataset.emoji) === want && outsideTiles(b));
       let btn = find(document);
-      if (!btn) {
-        // The reaction bar is closed.
-        (labelButton(/^send a reaction/i) || iconButton('mood'))?.click();
+      // The bar's own button is a toggle (aria-pressed), so only click it to
+      // open the bar, never when it is already open.
+      const bar = iconButton('mood') || labelButton(/^send a reaction/i);
+      if (!btn && bar && bar.getAttribute('aria-pressed') !== 'true') {
+        bar.click();
         btn = await until(() => find(document), 1500);
       }
       if (!btn) btn = await findInPicker(find);
