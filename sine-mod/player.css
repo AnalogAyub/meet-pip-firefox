@@ -12,7 +12,7 @@
 }
 body:hover #meetpip-bar, #meetpip-bar:focus-within { opacity: 1; }
 #meetpip-bar .row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-#meetpip-bar .reactions { justify-content: center; }
+#meetpip-bar .reactions { justify-content: center; gap: 2px; }
 #meetpip-bar button {
   appearance: none; border: 0; flex: none; width: 30px; height: 30px; padding: 0;
   border-radius: 50%; background: #3c4043; color: #e8eaed; cursor: pointer;
@@ -20,7 +20,8 @@ body:hover #meetpip-bar, #meetpip-bar:focus-within { opacity: 1; }
 }
 #meetpip-bar button:hover { background: #5f6368; }
 #meetpip-bar button[off] { background: #f9dedc; color: #8c1d18; }
-#meetpip-bar button.react { background: transparent; font-size: 18px; }
+/* Shrink to fit a narrow window. */
+#meetpip-bar button.react { background: transparent; flex: 0 1 34px; min-width: 0; width: auto; font-size: clamp(12px, 7vw, 18px); }
 #meetpip-bar button.react:hover { background: rgba(255, 255, 255, 0.2); }
 #meetpip-bar button.end { background: #d93025; color: #fff; width: 40px; border-radius: 15px; }
 #meetpip-bar button.end:hover { background: #ea4335; }

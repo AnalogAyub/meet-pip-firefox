@@ -9,7 +9,6 @@
   window.__meetPipMod = true;
 
   const REACTIONS = ["💖", "👍", "🎉", "👏", "😂", "😮"];
-  const ACTOR = "MeetPipBridge";
   const { PictureInPicture } = ChromeUtils.importESModule(
     "moz-src:///toolkit/components/pictureinpicture/PictureInPicture.sys.mjs"
   );
@@ -17,38 +16,19 @@
   // This mod's folder under chrome/sine-mods, served as chrome://sine/content/.
   const folder = (Components.stack.filename || "").match(/chrome:\/\/sine\/content\/(.+)\/[^/]+$/)?.[1] || "meet-pip";
 
-  // The bridge actor's modules are loaded by URL from the tab's process, so
-  // this mod's folder needs a resource:// name.
-  function registerActor() {
-    const dir = Services.dirsvc.get("ProfD", Ci.nsIFile);
-    for (const part of ["chrome", "sine-mods", ...folder.split("/")]) dir.append(part);
-    const res = Services.io.getProtocolHandler("resource").QueryInterface(Ci.nsIResProtocolHandler);
-    if (!res.hasSubstitution("meet-pip-mod")) res.setSubstitution("meet-pip-mod", Services.io.newFileURI(dir));
-    // Registered afresh for each PiP window, so an updated mod takes effect
-    // without restarting the browser.
-    try { ChromeUtils.unregisterWindowActor(ACTOR); } catch (e) { /* not registered yet */ }
-    try {
-      ChromeUtils.registerWindowActor(ACTOR, {
-        parent: { esModuleURI: "resource://meet-pip-mod/bridge-parent.js" },
-        child: { esModuleURI: "resource://meet-pip-mod/bridge-child.js" },
-        matches: ["https://meet.google.com/*"],
-        // Meet runs in a site-isolated process ("webIsolated=https://google.com").
-        remoteTypes: ["web", "webIsolated", "webCOOP+COEP"],
-        allFrames: false,
-      });
-    } catch (e) {
-      console.error("[meet-pip] actor registration failed", e);
-    }
-  }
-
-  // Second route to the tab, used if the actor is refused: a frame script.
+  // Runs in the Meet tab's process. Hands commands to the extension's content
+  // script as DOM events and passes its state events back. Loaded again for
+  // every PiP window, so it sets itself up only once per tab.
   const FRAME_SCRIPT = "data:application/javascript;charset=utf-8," + encodeURIComponent(`
-    addMessageListener("MeetPip:Command", m => {
-      content.document.dispatchEvent(new content.CustomEvent("meet-pip-command", { detail: JSON.stringify(m.data) }));
-    });
-    addEventListener("meet-pip-state", e => {
-      if (typeof e.detail === "string") sendAsyncMessage("MeetPip:State", e.detail.slice(0, 200));
-    }, true, true);
+    if (!globalThis.meetPipBridge) {
+      globalThis.meetPipBridge = true;
+      addMessageListener("MeetPip:Command", m => {
+        content.document.dispatchEvent(new content.CustomEvent("meet-pip-command", { detail: JSON.stringify(m.data) }));
+      });
+      addEventListener("meet-pip-state", e => {
+        if (typeof e.detail === "string") sendAsyncMessage("MeetPip:State", e.detail.slice(0, 200));
+      }, true, true);
+    }
   `);
 
   // Material mic, mic_off, videocam, videocam_off, call_end.
@@ -61,26 +41,20 @@
   };
 
   function start(browser) {
-    registerActor();
-    let viaFrameScript = false;
+    const mm = browser.messageManager;
+    try {
+      // Third argument: run in the tab's shared scope, so the once-only check works.
+      mm.loadFrameScript(FRAME_SCRIPT, false, true);
+      mm.addMessageListener("MeetPip:State", onState);
+    } catch (e) {
+      console.error("[meet-pip] could not reach the Meet tab", e);
+    }
+    // Each command carries an id; the extension ignores one it has seen.
+    let nextId = 0;
+    const session = Date.now().toString(36);
     const send = cmd => {
-      if (!viaFrameScript) {
-        try {
-          browser.browsingContext.currentWindowGlobal.getActor(ACTOR).sendAsyncMessage("MeetPip:Command", cmd);
-          return;
-        } catch (e) {
-          console.warn("[meet-pip] actor refused, using a frame script instead", e);
-          viaFrameScript = true;
-          try {
-            browser.messageManager.loadFrameScript(FRAME_SCRIPT, false);
-            browser.messageManager.addMessageListener("MeetPip:State", onFrameState);
-          } catch (err) {
-            console.error("[meet-pip] could not reach the Meet tab", err);
-          }
-        }
-      }
       try {
-        browser.messageManager.sendAsyncMessage("MeetPip:Command", cmd);
+        mm.sendAsyncMessage("MeetPip:Command", { ...cmd, id: `${session}-${nextId++}` });
       } catch (e) {
         console.error("[meet-pip] could not reach the Meet tab", e);
       }
@@ -107,9 +81,12 @@
     };
 
     const mic = button({ title: "Microphone" }, icon("micOn"), () => send({ cmd: "mic" }));
-    // Firefox holds a camera request from a tab that is not selected until it
-    // is. So to turn the camera on, show the Meet tab for a moment and then go
-    // back to the tab that was open. Turning it off needs none of this.
+    // Firefox applies a saved camera permission only when it could show the
+    // permission prompt: the Meet tab selected and its window the active one.
+    // While you are in the PiP window neither holds, so the request waits. To
+    // turn the camera on, bring the Meet tab and its window forward for a
+    // moment, then put the tab and the focus back. Turning it off needs none
+    // of this.
     let camOn = null;
     const cam = button({ title: "Camera" }, icon("camOn"), () => {
       send({ cmd: "cam" });
@@ -117,12 +94,14 @@
       const win = browser.ownerGlobal;
       const tabs = win?.gBrowser;
       const meetTab = tabs?.getTabForBrowser(browser);
-      const previous = tabs?.selectedTab;
-      if (!meetTab || previous === meetTab) return;
+      if (!meetTab) return;
       win.setTimeout(() => {
-        tabs.selectedTab = meetTab;
+        const previous = tabs.selectedTab;
+        if (previous !== meetTab) tabs.selectedTab = meetTab;
+        win.focus();
         win.setTimeout(() => {
-          if (tabs.selectedTab === meetTab && previous.isConnected) tabs.selectedTab = previous;
+          if (previous !== meetTab && tabs.selectedTab === meetTab && previous.isConnected) tabs.selectedTab = previous;
+          if (!window.closed) window.focus();
         }, 1200);
       }, 200);
     });
@@ -184,18 +163,9 @@
       setIcon(cam, state.cam ? "camOn" : "camOff", !state.cam);
       camOn = !!state.cam;
     };
-    function onFrameState(m) { showState(m.data); }
-    const observer = {
-      observe(_subject, _topic, data) {
-        let msg;
-        try { msg = JSON.parse(data); } catch (e) { return; }
-        if (msg.browserId === browser.browserId) showState(msg.state);
-      },
-    };
-    Services.obs.addObserver(observer, "meet-pip-state");
+    function onState(m) { showState(m.data); }
     window.addEventListener("unload", () => {
-      Services.obs.removeObserver(observer, "meet-pip-state");
-      try { browser.messageManager.removeMessageListener("MeetPip:State", onFrameState); } catch (e) { /* tab gone */ }
+      try { mm.removeMessageListener("MeetPip:State", onState); } catch (e) { /* tab gone */ }
     }, { once: true });
 
     document.head.append(el("link", { rel: "stylesheet", href: `chrome://sine/content/${folder}/player.css` }));

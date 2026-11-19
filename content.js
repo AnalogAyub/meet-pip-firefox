@@ -253,6 +253,8 @@
     for (const el of MEET.chatMessages()) {
       const id = 'm:' + el.getAttribute('data-message-id');
       if (seenChat.has(id)) continue;
+      // In case Meet nests one message element inside another.
+      if (el.parentElement.closest('[data-message-id]')) continue;
       const text = messageText(el);
       if (!text) continue;
       const sender = el.closest('[data-sender-name]')?.getAttribute('data-sender-name') || '';
@@ -866,10 +868,17 @@
     },
     leave: () => (labelButton(/^leave call/i) || iconButton('call_end'))?.click(),
   };
+  const seenCommands = new Set();
   document.addEventListener('meet-pip-command', e => {
     let c;
     try { c = JSON.parse(e.detail); } catch (err) { return; }
     if (!state.inCall || !c || !Object.hasOwn(COMMANDS, c.cmd)) return;
+    // The same command can be delivered more than once.
+    if (c.id) {
+      if (seenCommands.has(c.id)) return;
+      seenCommands.add(c.id);
+      if (seenCommands.size > 200) seenCommands.clear();
+    }
     Promise.resolve(COMMANDS[c.cmd](c)).catch(err => log('command failed', c.cmd, err));
   });
   let lastState = '';
