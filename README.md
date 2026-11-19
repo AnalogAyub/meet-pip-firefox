@@ -27,6 +27,8 @@ Firefox's built-in PiP show that video.
   Reactions float up over the video.
 - Each participant tile has a mic badge showing whether they are muted. Your
   own tile is always last, with your mic and camera state on it.
+- Meet's raise-hand gesture shows on your tile: a ring fills in green while
+  Meet counts, then a hand stays in the corner while your hand is up.
 - Whoever spoke last always has a tile, with their name on it and an outline
   while they talk, even with their camera off.
 - Meet is not told that PiP is open or that its tab is hidden, so it keeps the

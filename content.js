@@ -369,6 +369,10 @@
           const m = text.match(/\p{Extended_Pictographic}/u);
           if (m && text.length < 60) react(m[0], 'live');
         }
+        // Meet's raise-hand gesture: drives the ring on your tile, not a chat row.
+        if (/^hand detected/i.test(text)) { note('a:' + text, '', text, 'hand gesture started'); handDetected(); continue; }
+        if (/^hand no longer detected/i.test(text)) { note('a:' + text, '', text, 'hand gesture cancelled'); handFinished(false); continue; }
+        if (ANNOUNCE_NOISE.test(text)) note('a:' + text, '', text, 'Meet interface announcement, not shown');
         if (CONFIG.showChat && CONFIG.showAnnouncements && !ANNOUNCE_NOISE.test(text)) {
           const pieces = rec.type === 'characterData' ? [text] : [...rec.addedNodes].flatMap(textPieces);
           for (const piece of pieces) if (piece) queueLive(live, piece);
@@ -417,7 +421,38 @@
     ctx.drawImage(v, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
   }
 
-  const state = { micOff: false, camOff: false, inCall: false };
+  const state = { micOff: false, camOff: false, handUp: false, inCall: false };
+
+  // Raise-hand gesture. Meet announces "Hand detected", then raises your hand
+  // if you hold it up long enough, or announces "Hand no longer detected".
+  // `since` is set while the gesture is counting; `ms` is how long Meet took
+  // last time, measured, so the ring fills at Meet's own pace.
+  const hand = { since: 0, doneAt: -1e9, ms: 3000, timer: 0 };
+  try { hand.ms = +localStorage.getItem('meet-pip-hand-ms') || hand.ms; } catch (e) { /* ignore */ }
+  function handRaised() {
+    const btn = labelButton(/^(raise|lower) hand/i);
+    return !!btn && (btn.getAttribute('aria-pressed') === 'true' || /^lower hand/i.test(btn.getAttribute('aria-label')));
+  }
+  function handDetected() {
+    if (hand.since || handRaised()) return;
+    hand.since = performance.now();
+    hand.timer = setInterval(() => {
+      const waited = performance.now() - hand.since;
+      if (handRaised()) {
+        hand.ms = Math.max(800, Math.min(8000, Math.round(waited)));
+        try { localStorage.setItem('meet-pip-hand-ms', hand.ms); } catch (e) { /* ignore */ }
+        handFinished(true);
+      } else if (waited > hand.ms + 4000) {
+        handFinished(false);
+      }
+    }, 100);
+  }
+  function handFinished(raised) {
+    if (!hand.since) return;
+    clearInterval(hand.timer);
+    hand.since = 0;
+    if (raised) { hand.doneAt = performance.now(); state.handUp = true; }
+  }
 
   let CHAT_FONT, CHAT_LH, CHAT_PAD;
   function applyUnit() {
@@ -608,6 +643,42 @@
     const d = badgeSize(w), m = d * 0.22;
     statusBlock(x + w - d - m, y + m, d, d, !state.micOff, state.micOff ? 'micOff' : 'micOn');
     statusBlock(x + w - d * 2 - m * 1.6, y + m, d, d, !state.camOff, state.camOff ? 'camOff' : 'camOn');
+    drawHand(x, y, w, h, d, m);
+  }
+  // While the gesture counts: a ring in the middle of your tile filling
+  // clockwise in green. Once raised: a solid green hand for a moment, then a
+  // small one in the top-left corner for as long as your hand stays up.
+  const GREEN = '#34a853';
+  function drawHand(x, y, w, h, d, m) {
+    const now = performance.now();
+    const counting = hand.since > 0, justRaised = now - hand.doneAt < 1500;
+    if (!counting && !justRaised && !state.handUp) return;
+    const big = counting || justRaised;
+    const r = big ? Math.min(w, h) * 0.17 : d / 2;
+    const cx = big ? x + w / 2 : x + m + r, cy = big ? y + h / 2 : y + m + r;
+    ctx.fillStyle = counting ? 'rgba(0, 0, 0, 0.6)' : GREEN;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    if (counting) {
+      const lw = r * 0.16, p = Math.min(1, (now - hand.since) / hand.ms);
+      ctx.lineWidth = lw;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - lw / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = GREEN;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - lw / 2, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
+    ctx.font = `${r * 1.05}px "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✋', cx, cy + r * 0.06);
+    ctx.textAlign = 'left';
   }
 
   function drawMessage(message, areaH) {
@@ -857,7 +928,7 @@
     hello: () => sendState(true),
     // Diagnostics: copy(document.documentElement.dataset.meetPipLog) in the console.
     debug() {
-      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.13', rows: chat, log: chatLog }, null, 1);
+      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.14', rows: chat, log: chatLog }, null, 1);
     },
     mic: () => clickMic(),
     cam() {
@@ -957,7 +1028,7 @@
   mirror.addEventListener('leavepictureinpicture', () => setPipActive(false));
   function targetFps() {
     if (!state.inCall) return 1;
-    return pipActive || !document.hasFocus() ? CONFIG.fps : CONFIG.idleFps;
+    return pipActive || hand.since || !document.hasFocus() ? CONFIG.fps : CONFIG.idleFps;
   }
   let lastDraw = 0;
   function tick(now) {
@@ -986,6 +1057,7 @@
 
     state.micOff = MEET.isOff(MEET.micButton());
     state.camOff = MEET.isOff(MEET.camButton());
+    state.handUp = handRaised();
     sendState(false);
     scanChat();
     positionDock();

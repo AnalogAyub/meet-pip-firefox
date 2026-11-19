@@ -63,6 +63,7 @@
   <!-- "More emojis": a picker that only renders the row in view, like Meet's. -->
   <button aria-label="More emojis" aria-controls="picker" onclick="togglePicker()"><i>add_reaction</i></button>
   <button aria-label="Chat with everyone" onclick="mockLog.push('chat panel'); chatPanel.childElementCount ? chatPanel.replaceChildren() : chatPanel.append(chatBox.content.cloneNode(true))"><i>chat</i></button>
+  <button aria-label="Raise hand (ctrl + ⌘ + h)" aria-pressed="false" id="handBtn"><i>back_hand</i></button>
   <button aria-label="Leave call" onclick="mockLog.push('leave')"><i>call_end</i></button>
 </div></div>
 <script>
@@ -115,6 +116,13 @@
     const ring = tile.querySelector('[jsname=QgSmzd]');
     setInterval(() => { ring.className = ring.className === 'gjg47c' ? 'HX2H7' : 'gjg47c'; }, 150);
   }
+  // ?hand: the raise-hand gesture, 1s after load. ?hand=cancel lowers it before Meet raises.
+  if (q.has('hand')) setTimeout(() => {
+    const l = document.getElementById('live'), say = t => { const d = document.createElement('div'); d.textContent = t; l.append(d); };
+    say('Hand detected');
+    if (q.get('hand') === 'cancel') setTimeout(() => say('Hand no longer detected'), 1500);
+    else setTimeout(() => handBtn.setAttribute('aria-pressed', 'true'), 3000);
+  }, 1000);
   window.sim = () => {
     const l = document.getElementById('live');
     for (const text of ['Carla says: looks great', 'The presentation by Alice was added to the main screen.', 'Loading...', '35 results.', 'Erin says: here is a much longer message that will not fit on a single line and so has to scroll sideways to be read', 'Dana Lee joined', 'Dana Lee has left the meeting', 'Dana Lee has started transcription', 'Transcription has started', 'Weekly sync panel is open', 'You reacted with 👍.']) {
