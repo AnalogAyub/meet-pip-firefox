@@ -70,7 +70,8 @@
       return this.toggleButtons().length > 0 && this.tiles().length > 0;
     },
     chatMessages() {
-      return document.querySelectorAll('[data-message-id]');
+      // A message's pin button carries the same id; only the message itself.
+      return document.querySelectorAll('[data-message-id]:not(button)');
     },
   };
 
@@ -217,21 +218,30 @@
     const [short, long] = a.length < b.length ? [a, b] : [b, a];
     return short.length >= 12 && long.includes(short);
   }
+  // Every report of a chat message and what became of it, for working out
+  // why a row did or didn't appear. The "debug" command writes it to the page.
+  const chatLog = [];
+  function note(key, sender, text, result) {
+    chatLog.push({ at: new Date().toISOString().slice(11, 23), source: key.slice(0, 2) === 'm:' ? 'panel' : 'announced', key: key.slice(0, 60), sender, text, result });
+    if (chatLog.length > 60) chatLog.shift();
+  }
   function pushChat(key, sender, text, fromPanel = false) {
-    if (seenChat.has(key)) return;
+    if (seenChat.has(key)) { note(key, sender, text, 'same key, ignored'); return; }
     seenChat.add(key);
     if (seenChat.size > 500) seenChat.clear();
     text = text.replace(/\s+/g, ' ').trim().slice(0, 240);
-    if (!text) return;
+    if (!text) { note(key, sender, text, 'empty, ignored'); return; }
     const now = Date.now();
     const same = chat.find(m => now - m.t < 120000 && !(fromPanel && m.fromPanel) && sameText(m.text, text));
     if (same) {
       if (sender && !same.sender) { same.sender = sender; chatVersion++; }
+      note(key, sender, text, 'same text as an existing row, merged');
       return;
     }
     chat.push({ sender, text, t: now, fromPanel });
     chatVersion++;
     if (chat.length > 30) chat.shift();
+    note(key, sender, text, 'new row');
   }
 
   // A message element also holds its hover actions: icon names ("keep") and
@@ -253,9 +263,10 @@
     for (const el of MEET.chatMessages()) {
       const id = 'm:' + el.getAttribute('data-message-id');
       if (seenChat.has(id)) continue;
-      // In case Meet nests one message element inside another.
-      if (el.parentElement.closest('[data-message-id]')) continue;
-      const text = messageText(el);
+      // Meet keeps the text in its own element; fall back to everything that
+      // isn't a hover action.
+      const body = el.querySelector('[jsname="dTKtvb"]');
+      const text = body ? body.textContent.replace(/\s+/g, ' ').trim() : messageText(el);
       if (!text) continue;
       const sender = el.closest('[data-sender-name]')?.getAttribute('data-sender-name') || '';
       pushChat(id, sender, text, true);
@@ -819,6 +830,10 @@
   }
   const COMMANDS = {
     hello: () => sendState(true),
+    // Diagnostics: copy(document.documentElement.dataset.meetPipLog) in the console.
+    debug() {
+      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.12', rows: chat, log: chatLog }, null, 1);
+    },
     mic: () => clickMic(),
     cam() {
       MEET.camButton()?.click();
@@ -827,7 +842,7 @@
     async react({ emoji }) {
       if (typeof emoji !== 'string' || emoji.length > 16 || !EMOJI_RE.test(emoji)) return;
       const find = () => [...document.querySelectorAll('button, [role="button"], [role="option"], [role="gridcell"]')].find(b =>
-        outsideTiles(b) && !root.contains(b) && (b.getAttribute('aria-label') === emoji || b.dataset.emoji === emoji ||
+        outsideTiles(b) && !root.contains(b) && (b.dataset.emoji === emoji || b.getAttribute('aria-label') === emoji ||
           b.querySelector('img')?.alt === emoji || b.textContent.trim() === emoji));
       let btn = find();
       if (!btn) {
@@ -837,7 +852,7 @@
       }
       if (!btn) {
         // Not one of the quick reactions: look in the full picker.
-        const more = labelButton(/^more emojis/i) || iconButton('add_reaction');
+        const more = iconButton('add_reaction') || labelButton(/^more emojis/i);
         more?.click();
         btn = await until(find, 2000);
         // Not there either; close the picker again.

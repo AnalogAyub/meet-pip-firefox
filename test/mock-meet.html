@@ -34,7 +34,7 @@
   <div class="tile self" data-participant-id="p4"><video autoplay muted playsinline></video></div>
 </div>
 <div id="live" aria-live="polite" style="position:absolute;left:-999px"></div>
-<div style="display:none"><div data-sender-name="Bob Builder"><div data-message-id="m1"><button aria-label="Pin message"><i>keep</i></button><div role="tooltip">Pin message</div>Can everyone see the deck? I will drop the link in here in a second so you can follow along with the numbers</div></div></div>
+<div style="display:none"><div data-sender-name="Bob Builder"><div data-message-id="m1"><div jsname="dTKtvb"><div>Can everyone see the deck? I will drop the link in here in a second so you can follow along with the numbers</div></div><button aria-label="Pin message" data-message-id="m1"><i>keep</i></button><div role="tooltip">Pin message</div></div></div></div>
 <!-- Chat panel: the textarea only exists while the panel is open. -->
 <div id="chatPanel" hidden></div>
 <template id="chatBox"><textarea aria-label="Send a message"></textarea>
@@ -44,7 +44,7 @@
   <div class="pair"><button aria-label="Audio settings">^</button><button data-is-muted="false" aria-label="Turn off microphone (⌘+d)">mic</button></div>
   <div class="pair"><button aria-label="Video settings">^</button><button data-is-muted="false" aria-label="Turn off camera (⌘+e)">cam</button></div>
   <button>a</button><button>b</button><button>c</button><button>d</button>
-  <button aria-label="👍" onclick="mockLog.push('react 👍')"><img alt="👍"></button>
+  <button aria-label="👍" data-emoji="👍" onclick="mockLog.push('react 👍')"><img alt="👍" data-emoji="👍"></button>
   <button aria-label="Chat with everyone" onclick="mockLog.push('chat panel'); chatPanel.childElementCount ? chatPanel.replaceChildren() : chatPanel.append(chatBox.content.cloneNode(true))"><i>chat</i></button>
   <button aria-label="Leave call" onclick="mockLog.push('leave')"><i>call_end</i></button>
 </div></div>
