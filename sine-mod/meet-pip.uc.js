@@ -114,12 +114,11 @@
     const cam = button({ title: "Camera" }, icon("camOn"), () => {
       send({ cmd: "cam" });
       if (camOn === true) return;
-      const log = (...a) => console.log("[meet-pip] camera:", ...a);
       // The window holding the tab: documentGlobal in current Firefox, ownerGlobal before.
       const win = browser.documentGlobal || browser.ownerGlobal;
       const tabs = win?.gBrowser;
       const meetTab = tabs?.getTabForBrowser(browser);
-      if (!meetTab) { log("could not find the Meet tab"); return; }
+      if (!meetTab) return;
       const previous = tabs.selectedTab;
       const request = () => {
         try { return win.PopupNotifications.getNotification("webRTC-shareDevices", browser); } catch (e) { return null; }
@@ -139,11 +138,9 @@
         } else if (sawRequest ? !pending : Date.now() - forwardAt > 1500) {
           if (previous !== meetTab && previous.isConnected) tabs.selectedTab = previous;
           if (!window.closed) window.focus();
-          log(`granted; Meet tab was in front for ${Date.now() - forwardAt}ms`);
           return;
         } else if (Date.now() - forwardAt > 4000) {
           // Still asking: Firefox is showing its prompt, so stay on the Meet tab to answer it.
-          log("Firefox is asking for camera permission; staying on the Meet tab");
           return;
         }
         win.setTimeout(step, 30);
@@ -179,7 +176,8 @@
     const bar = el("div", { id: "meetpip-bar" },
       el("div", { class: "row reactions" },
         ...REACTIONS.map(emoji => button({ class: "react", title: emoji }, emoji, () => send({ cmd: "react", emoji }))),
-        more, custom),
+        // The hidden box sits on the + so the macOS picker opens from there.
+        el("span", { class: "more" }, more, custom)),
       el("div", { class: "row" }, mic, cam, chat, end));
 
     // The player treats key presses as playback shortcuts (space would switch
@@ -226,6 +224,14 @@
     document.documentElement.setAttribute("meetpip", "");
     document.body.append(bar);
     send({ cmd: "hello" });
+    // The extension matches its tile corners to this window's, which needs the width.
+    const sendSize = () => send({ cmd: "window", width: window.innerWidth });
+    let sizeTimer = 0;
+    window.addEventListener("resize", () => {
+      clearTimeout(sizeTimer);
+      sizeTimer = setTimeout(sendSize, 150);
+    });
+    sendSize();
   }
 
   // The player learns which tab it belongs to shortly after it loads.

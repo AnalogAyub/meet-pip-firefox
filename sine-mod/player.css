@@ -32,4 +32,6 @@ body:hover #meetpip-bar, #meetpip-bar:focus-within { opacity: 1; }
 }
 #meetpip-bar input::placeholder { color: #9aa0a6; }
 /* Receives what the macOS emoji picker types; never seen. */
-#meetpip-bar input.emoji { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; pointer-events: none; }
+#meetpip-bar .more { position: relative; display: flex; flex: 0 1 34px; min-width: 0; }
+#meetpip-bar .more button { flex: 1 1 auto; }
+#meetpip-bar input.emoji { position: absolute; left: 50%; top: 50%; width: 1px; height: 1px; padding: 0; opacity: 0; pointer-events: none; }

@@ -22,6 +22,7 @@
     chatLines: 4,           // most recent messages kept on screen
     chatTtlMs: 10000,       // how long a chat row stays up; longer if a long message needs it to scroll twice
     showTileMic: true,      // mic badge on each participant tile
+    pipCornerRadius: 19,    // the PiP window's corner radius in CSS px (macOS), for matching tile corners
     showAnnouncements: true, // also show Meet's screen-reader announcements (chat toasts, raised hands)
     showReactions: true,
     pipMuteTogglesMic: true,     // PiP window mute button -> Meet microphone
@@ -402,13 +403,21 @@
     H = canvas.height = h;
   }
 
+  // Corner radius for tiles. The Zen mod reports the PiP window's width; with
+  // it, tiles follow the window's own rounded corners (an inner corner is the
+  // outer one less the gap between them). Without it, a fixed radius.
+  let pipWidth = 0;
+  function tileRadius(w, h) {
+    const r = pipWidth ? Math.max(u(8), CONFIG.pipCornerRadius * W / pipWidth - u(8)) : u(14);
+    return Math.min(r, Math.min(w, h) * 0.3);
+  }
   function drawCover(v, x, y, w, h) {
     const vw = v.videoWidth, vh = v.videoHeight;
     const scale = Math.max(w / vw, h / vh);
     const sw = w / scale, sh = h / scale;
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, u(14));
+    ctx.roundRect(x, y, w, h, tileRadius(w, h));
     ctx.clip();
     ctx.drawImage(v, (vw - sw) / 2, (vh - sh) / 2, sw, sh, x, y, w, h);
     ctx.restore();
@@ -573,7 +582,7 @@
       // Camera off: a plain tile with the name.
       ctx.fillStyle = '#2b2c2f';
       ctx.beginPath();
-      ctx.roundRect(x, y, w, h, u(14));
+      ctx.roundRect(x, y, w, h, tileRadius(w, h));
       ctx.fill();
     }
     if (isSpeaker && entry.name) {
@@ -611,7 +620,7 @@
       ctx.strokeStyle = '#8ab4f8';
       ctx.lineWidth = lw;
       ctx.beginPath();
-      ctx.roundRect(x + lw / 2, y + lw / 2, w - lw, h - lw, u(14));
+      ctx.roundRect(x + lw / 2, y + lw / 2, w - lw, h - lw, tileRadius(w, h) - lw / 2);
       ctx.stroke();
     }
     if (!CONFIG.showTileMic || entry.muted === null) return;
@@ -631,7 +640,7 @@
     } else {
       ctx.fillStyle = '#2b2c2f';
       ctx.beginPath();
-      ctx.roundRect(x, y, w, h, u(14));
+      ctx.roundRect(x, y, w, h, tileRadius(w, h));
       ctx.fill();
       ctx.fillStyle = '#9aa0a6';
       ctx.font = `500 ${Math.max(u(20), Math.min(u(30), w * 0.11))}px ${FONT}`;
@@ -709,7 +718,7 @@
       if (!cell.more) { drawTile(cell, x, y, cw, ch); return; }
       ctx.fillStyle = '#2b2c2f';
       ctx.beginPath();
-      ctx.roundRect(x, y, cw, ch, u(18));
+      ctx.roundRect(x, y, cw, ch, tileRadius(cw, ch));
       ctx.fill();
       ctx.fillStyle = '#e8eaed';
       ctx.font = `500 ${u(44)}px ${FONT}`;
@@ -926,9 +935,12 @@
   }
   const COMMANDS = {
     hello: () => sendState(true),
+    window({ width }) {
+      if (width > 100 && width < 5000) pipWidth = width;
+    },
     // Diagnostics: copy(document.documentElement.dataset.meetPipLog) in the console.
     debug() {
-      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.17', rows: chat, log: chatLog }, null, 1);
+      document.documentElement.dataset.meetPipLog = JSON.stringify({ version: '0.4.18', rows: chat, log: chatLog }, null, 1);
     },
     mic: () => clickMic(),
     cam() {
