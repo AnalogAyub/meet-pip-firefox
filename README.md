@@ -60,7 +60,7 @@ replaces the PiP window's play and mute controls, for Meet calls only, with a
 bar that appears on hover:
 
 - mic and camera buttons that show the current state. Turning the camera on
-  shows the Meet tab for a second, because Firefox only grants the camera to
+  shows the Meet tab for a moment, because Firefox only grants the camera to
   the selected tab
 - six quick reactions, and a + for any other emoji
 - a chat box (Enter sends)

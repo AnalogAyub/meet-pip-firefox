@@ -84,42 +84,48 @@
     // Firefox applies a saved camera permission only when it could show the
     // permission prompt: the Meet tab selected and its window the active one.
     // While you are in the PiP window neither holds, so the request waits. To
-    // turn the camera on, bring the Meet tab and its window forward for a
-    // moment, then put the tab and the focus back. Turning it off needs none
-    // of this.
+    // turn the camera on: wait for Meet's request to exist, bring the Meet tab
+    // and its window forward, and go back the moment the request is gone
+    // (granted). Turning the camera off needs none of this.
     let camOn = null;
     const cam = button({ title: "Camera" }, icon("camOn"), () => {
       send({ cmd: "cam" });
-      // Each step is logged to the Browser Console, to see where it stops
-      // when the camera does not come on.
-      const log = (...a) => console.log("[meet-pip] camera:", ...a);
-      log("clicked; camera reported as", camOn === null ? "unknown" : camOn ? "on" : "off");
       if (camOn === true) return;
+      const log = (...a) => console.log("[meet-pip] camera:", ...a);
       // The window holding the tab: documentGlobal in current Firefox, ownerGlobal before.
       const win = browser.documentGlobal || browser.ownerGlobal;
       const tabs = win?.gBrowser;
       const meetTab = tabs?.getTabForBrowser(browser);
       if (!meetTab) { log("could not find the Meet tab"); return; }
-      // The tab to come back to, read now, before anything changes.
       const previous = tabs.selectedTab;
-      const name = tab => (tab === meetTab ? "the Meet tab" : `"${(tab?.label || "?").slice(0, 30)}"`);
-      log("tab to return to:", name(previous));
-      win.setTimeout(() => {
-        log("selected just before switching:", name(tabs.selectedTab));
-        if (tabs.selectedTab !== meetTab) tabs.selectedTab = meetTab;
-        win.focus();
-        log("Meet tab selected:", tabs.selectedTab === meetTab, "| Meet window active:", Services.focus.activeWindow === win);
-        win.setTimeout(() => {
-          log("after 1.5s, Meet window active:", Services.focus.activeWindow === win, "| camera reported as", camOn === null ? "unknown" : camOn ? "on" : "off");
-          if (previous !== meetTab && previous.isConnected) {
-            tabs.selectedTab = previous;
-            log("switched back; now selected:", name(tabs.selectedTab));
-          } else {
-            log("not switching back; tab to return to is", name(previous), "| still open:", !!previous?.isConnected);
+      const request = () => {
+        try { return win.PopupNotifications.getNotification("webRTC-shareDevices", browser); } catch (e) { return null; }
+      };
+      const clicked = Date.now();
+      let forwardAt = 0, sawRequest = false;
+      const step = () => {
+        const pending = !!request();
+        sawRequest ||= pending;
+        if (!forwardAt) {
+          // Go forward once Meet has asked, or after 600ms in case the request can't be seen.
+          if (pending || Date.now() - clicked > 600) {
+            if (tabs.selectedTab !== meetTab) tabs.selectedTab = meetTab;
+            win.focus();
+            forwardAt = Date.now();
           }
+        } else if (sawRequest ? !pending : Date.now() - forwardAt > 1500) {
+          if (previous !== meetTab && previous.isConnected) tabs.selectedTab = previous;
           if (!window.closed) window.focus();
-        }, 1500);
-      }, 200);
+          log(`granted; Meet tab was in front for ${Date.now() - forwardAt}ms`);
+          return;
+        } else if (Date.now() - forwardAt > 4000) {
+          // Still asking: Firefox is showing its prompt, so stay on the Meet tab to answer it.
+          log("Firefox is asking for camera permission; staying on the Meet tab");
+          return;
+        }
+        win.setTimeout(step, 30);
+      };
+      win.setTimeout(step, 30);
     });
     const chat = el("input", { type: "text", placeholder: "Message everyone", maxlength: "500" });
     const end = button({ class: "end", title: "Leave call and close the tab" }, icon("end"), () => {
